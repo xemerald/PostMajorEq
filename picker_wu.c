@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 /* */
@@ -19,8 +21,8 @@ static double characteristic_func_2( const double, const double );
  *
  */
 int picker_wu(
-	const double *input_z, const double *input_n, const double *input_e,
-	const int np, const double delta, const int cf_flag, const int is,
+	const float *input_z, const float *input_n, const float *input_e,
+	const int np, const double delta, const int cf_flag, const int p_start,
 	double *p_arrive, double *s_arrive, double *p_weight, double *s_weight
 ) {
 	_Bool trigger = 0;
@@ -30,7 +32,7 @@ int picker_wu(
 	int   ilta, ista;
 	const int samprate = (int)(1.0 / delta);
 
-	double *_input[3] = {
+	const float *_input[3] = {
 		input_z, input_n, input_e
 	};
 	double sum0, sum1, sum2;
@@ -43,16 +45,16 @@ int picker_wu(
 	if ( tmp <= 0 )
 		tmp = np;
 /* */
-	for ( i = 0; i < 3; i++ ) {
+	//for ( i = 0; i < 3; i++ ) {
 	/* */
-		sum0 = 0.0;
-		for ( j = 0; j < tmp; j++ )
-			sum0 += _input[i][j];
+		//sum0 = 0.0;
+		//for ( j = 0; j < tmp; j++ )
+			//sum0 += _input[i][j];
 	/* */
-		sum0 /= (double)tmp;
-		for ( j = 0; j < np; j++ )
-			_input[i][j] -= sum0;
-	}
+		//sum0 /= (double)tmp;
+		//for ( j = 0; j < np; j++ )
+			//_input[i][j] -= sum0;
+	//}
 
 /* Initial the arrivals & weightings */
 	*p_arrive = 0.0;
@@ -69,8 +71,15 @@ int picker_wu(
 	if ( tmp > np )
 		tmp = np;
 	for ( i = 0; i < tmp; i++ ) {
-	/* Might need a switch statement here!!! */
-		sum0 += characteristic_func_2( _input[0][i+1], _input[0][i] );
+	/* */
+		switch ( cf_flag ) {
+		case 2: default:
+			sum0 += characteristic_func_2( _input[0][i+1], _input[0][i] );
+			break;
+		case 1:
+			sum0 += characteristic_func_1( _input[0][i] );
+			break;
+		}
 	}
 	x_sta = sum0 / tmp;
 	x_lta = x_sta * 1.25;
@@ -79,7 +88,14 @@ int picker_wu(
 	j = tmp;
 	for ( i = tmp; i < np; i++ ) {
 	/* Might need a switch statement here!!! */
-		sum0 = characteristic_func_2( _input[0][i], _input[0][i-1] );
+		switch ( cf_flag ) {
+		case 2: default:
+			sum0 = characteristic_func_2( _input[0][i], _input[0][i-1] );
+			break;
+		case 1:
+			sum0 = characteristic_func_1( _input[0][i] );
+			break;
+		}
 	/* Update STA & LTA for each incoming data points */
 		x_sta = (x_sta * (ista - 1) + sum0) / (double)ista;
 		/* x_sta += (sum - x_sta) / ista */
@@ -101,8 +117,8 @@ int picker_wu(
 	 * P wave trigger, and exit this loop, and to go to
 	 * next step to calculate P arrival's quality.
 	 */
-		//if ( i < is )
-			//continue;
+		if ( i < p_start )
+			continue;
 		if ( ratio > PWAVE_TRIGGER ) {
 			trigger = 1;
 			ip_tri  = i;
@@ -257,6 +273,8 @@ int picker_wu(
 	}
 /* End of detecting P arrival */
 
+	if ( _input[1] == NULL || _input[2] == NULL )
+		return 1;
 /*
  * Setup picking range, picking S arrival from 2 to 42
  * seconds after P trigger
@@ -276,8 +294,16 @@ int picker_wu(
 	sum0 = 0.0;
 	for ( i = tmp; i < tmp + ista; i++ ) {
 	/* */
-		sum0 += characteristic_func_2( _input[1][i], _input[1][i-1] );
-		sum0 += characteristic_func_2( _input[2][i], _input[2][i-1] );
+		switch ( cf_flag ) {
+		case 2: default:
+			sum0 += characteristic_func_2( _input[1][i], _input[1][i-1] );
+			sum0 += characteristic_func_2( _input[2][i], _input[2][i-1] );
+			break;
+		case 1:
+			sum0 += characteristic_func_1( _input[1][i] );
+			sum0 += characteristic_func_1( _input[2][i] );
+			break;
+		}
 	}
 /* Initialize the LTA, is setted to equal X_STA */
 	x_sta = sum0 / (double)ista;
@@ -288,8 +314,16 @@ int picker_wu(
 	is_arr  = 0;
 	for ( i = tmp + ista; i < j; i++ ) {
 	/* Might need a switch statement here!!! */
-		sum0  = characteristic_func_2( _input[1][i], _input[1][i-1] );
-		sum0 += characteristic_func_2( _input[1][i], _input[1][i-1] );
+		switch ( cf_flag ) {
+		case 2: default:
+			sum0  = characteristic_func_2( _input[1][i], _input[1][i-1] );
+			sum0 += characteristic_func_2( _input[1][i], _input[1][i-1] );
+			break;
+		case 1:
+			sum0  = characteristic_func_1( _input[1][i] );
+			sum0 += characteristic_func_1( _input[2][i] );
+			break;
+		}
 	/* Update STA & LTA for each incoming data points */
 		x_sta = (x_sta * (ista - 1) + sum0) / (double)ista;
 		/* x_sta += (sum - x_sta) / ista */

@@ -1,28 +1,18 @@
 /*
  * Standalone program to read SAC data files and write
- * earthworm TRACE_BUF2 messages.
- * That file can then be made into a tankplayer file using remux_tbuf.
- *
- * Pete Lombard; May 2001
  */
 
-#define VERSION_NUM  "0.0.2 2013-06-14"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <math.h>
 #include <errno.h>
-#include "trace_buf.h"
 #include "sachead.h"
-#include "swap.h"
-#include "time_ew.h"
 
-#define DEF_MAX_STA 700
 
 /* Internal Structure Prototypes */
 double delaz( double, double, double, double );
-int locpt( float, float, float *, float *, int, int, int * );
 
 typedef struct {
 	/* Station profile */
@@ -36,25 +26,20 @@ typedef struct {
 
 int main( int argc, char **argv )
 {
-	int i, j, count;
-	int zonecount;
-	float x[1500], y[1500];
+	int   i, j;
 	FILE *fp;
 
 	STAINFO stainfo[DEF_MAX_STA];
 	STAINFO tmp;
 
-	/* Check command line arguments
-	******************************/
-	if ( argc != 2 )
-	{
-		fprintf( stderr, "Usage: <Inputfile>\n" );
-		exit( 0 );
+/* Check command line arguments */
+	if ( argc != 2 ) {
+		fprintf(stderr, "Usage: <Inputfile>\n");
+		exit(0);
 	}
 
-	/* Initialize the station info array
-	************************************/
-	memset( stainfo, 0, sizeof(stainfo) );
+/* Initialize the station info array */
+	memset(stainfo, 0, sizeof(stainfo));
 	memset( &tmp, 0, sizeof(tmp) );
 	count = 0;
 
@@ -299,14 +284,14 @@ int locpt (float ex, float ey, float *x, float *y, int n, int l, int *m)
 	u = *x - ex;
 	v = *y - ey;
 
-	if ( u == 0.0 && v == 0.0 ) 
+	if ( u == 0.0 && v == 0.0 )
 	{
 		l = 0;
 		return l;
-	} 
-	
+	}
+
 	if ( n0 < 2 ) return l;
-	
+
 	theta[1] = atan2(v, u);
 	sum = 0.0;
 	theta[0] = theta[1];
@@ -316,16 +301,16 @@ int locpt (float ex, float ey, float *x, float *y, int n, int l, int *m)
 		u = *(x+i) - ex;
 		v = *(y+i) - ey;
 
-		if (u == 0.0 && v == 0.0) 
+		if (u == 0.0 && v == 0.0)
 		{
 			l = 0;
 			return l;
 		}
 
 		theta[i] = atan2(v, u);
-  
+
 		angle = fabs(theta[i] - theta[0]);
-		
+
 		if (fabs(angle - pi) < tol)
 		{
 			l = 0;
@@ -334,25 +319,25 @@ int locpt (float ex, float ey, float *x, float *y, int n, int l, int *m)
 
 		if (angle > pi) angle = angle - pi2;
 		if (theta[0] > theta[i]) angle = -angle;
-		
+
 		sum = sum + angle;
 		theta[0] = theta[i];
 	}
 
 	angle = fabs(theta[1] - theta[0]);
-	
+
 	if (fabs(angle - pi) < tol)
 	{
 		l = 0;
 		return l;
 	}
-	
+
 	if (angle > pi) angle = angle - pi2;
 	if (theta[0] > theta[1]) angle = -angle;
 
 	sum = sum + angle;
 	*m = (int)(fabs(sum)/pi2 + 0.2);
-	
+
 	if (*m == 0) return l;
 	l = 1;
 	if (sum < 0.0) *m = -(*m);
