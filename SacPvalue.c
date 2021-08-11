@@ -20,165 +20,258 @@
 
 
 /* Internal Function Prototypes */
-static int readSACHdr( FILE *, struct SAChead * );
-static void Swap4ByteOrder( void * );
+static int read_sac_header( FILE *, struct SAChead * );
+static void swap_order_4byte( void * );
+
 int picker_wu(
 	const float *, const float *, const float *, const int, const double, const int, const int,
 	double *, double *, double *, double *
 );
-typedef struct {
-	/* Station profile */
-	char station[8];
-	float longitude;
-	float latitude;
-	/*double altitude;*/ /* Unused for now */
-	float pga;
-	float pgv;
-} STAINFO;
 
+/*
+ *
+ */
 int main( int argc, char **argv )
 {
 	struct SAChead sh;
 
-	FILE *fp, *fp_station;
+	FILE  *fp;
+	float *seis[3];       /* input trace buffer */
 
-	int i;
-	int npts, datalen;
-	float *seis, *pseis;       /* input trace buffer */
-	float max_seis, max_pseis;
+	int   i, j;
+	int   npts, datalen;
+	int   _flag = 0;
 	float baseline;
-	float acc0, vel0;
-	double sTime;
+	float gain_factor;
 
-	STAINFO stainfo;
-
-	float alt;
-	float gain[3], gain_factor;
-	short type;
-	short flag = 0;
-	short swapIsNeeded = 0;
-
-	double	pa, sa, pw, sw;
-
-
+/* Final output data */
+	float pga, pgv, pgd;
+	float pga_time, pgv_time, pgd_time;
+	float pd35_time, pga80_time, pga4_time, pga2_time;
+	float pga_leadtime, pgv_leadtime;
+	float pd3, tc;
+	double p_arrival, s_arrival, p_weight, s_weight;
 
 /* Check command line arguments */
-	if ( argc != 2 ) {
-		fprintf(stderr, "Usage: <Inputfile>\n");
+	if ( argc != 4 ) {
+		fprintf(stderr, "Usage: %s <Z Component File> <N Component File> <E Component File>\n", argv[0]);
 		exit(0);
 	}
 
-	memset(&stainfo, 0, sizeof(stainfo));
-
-/* Open the SAC file */
-	if ( (fp = fopen(argv[1], "rb")) == (FILE *)NULL ) {
-		fprintf(stderr, "Error opening %s\n", argv[1]);
-		exit(1);
-	}
-
-	if ( (swapIsNeeded = readSACHdr(fp, &sh)) < 0 ) {
-		fclose(fp);
-		exit(1);
-	}
-
-	npts = (int)sh.npts;
-	datalen = npts * sizeof(float);
-
-	if ( (seis = (float *) malloc((size_t)datalen)) == (float *)NULL ) {
-		fprintf(stderr, "Out of memory for %d SAC samples\n", npts);
-		fclose(fp);
-		exit(1);
-	}
-
-	if ( (pseis = (float *) malloc((size_t)datalen)) == (float *)NULL ) {
-		fprintf(stderr, "Out of memory for %d SAC samples\n", npts);
-		fclose(fp);
-		exit(1);
-	}
-
-/* Read the sac data into a buffer */
-	if ( (i = (int)fread(seis, sizeof(float), sh.npts, fp)) != npts ) {
-		fprintf(stderr, "Error reading SAC data: %s\n", strerror(errno));
-		fclose(fp);
-		exit(1);
-	}
-	fclose(fp);
-
-	if ( swapIsNeeded == 1 ) {
-		for ( i = 0; i < npts; i++ )
-			Swap4ByteOrder( &(seis[i]) );
-	}
-
-	do {
-		if ( sh.kcmpnm[2] == 'Z' ) {
-			gain_factor = 0.059814;
-			flag = 0;
+/* Open all the three SAC files */
+	for ( i = 0; i < 3; i++ ) {
+	/* Opening the SAC files */
+		if ( (fp = fopen(argv[i+1], "rb")) == (FILE *)NULL ) {
+			fprintf(stderr, "Error opening %s\n", argv[i+1]);
+			exit(1);
 		}
-		else if ( sh.kcmpnm[2] == 'N' ) {
-			gain_factor = 0.059814;
-			flag = 0;
+		if ( (_flag = read_sac_header(fp, &sh)) < 0 ) {
+			fclose(fp);
+			exit(1);
 		}
-		else if ( sh.kcmpnm[2] == 'E' ) {
-			gain_factor = 0.059814;
-			flag = 0;
+	/* */
+		npts    = (int)sh.npts;
+		datalen = npts * sizeof(float);
+		if ( (seis[i] = (float *)malloc((size_t)datalen)) == (float *)NULL ) {
+			fprintf(stderr, "Out of memory for %d float samples\n", npts);
+			fclose(fp);
+			exit(1);
 		}
-		else {
-			if ( flag > 1 ) {
-				printf("Incorrect! Please enter the direction again (Z, N or E):\n");
+	/* Read the sac data into a buffer */
+		if ( (datalen = (int)fread(seis[i], sizeof(float), sh.npts, fp)) != npts ) {
+			fprintf(stderr, "Error reading SAC data: %s\n", strerror(errno));
+			fclose(fp);
+			exit(1);
+		}
+		fclose(fp);
+	/* */
+		if ( _flag == 1 )
+			for ( j = 0; j < npts; j++ )
+				swap_order_4byte( &(seis[i][j]) );
+
+	/* */
+		switch ( sh.kcmpnm[2] ) {
+		case 'Z':
+			gain_factor = 0.059814;
+			break;
+		case 'N':
+			gain_factor = 0.059814;
+			break;
+		case 'E':
+			gain_factor = 0.059814;
+			break;
+		default:
+			//fprintf(stderr, "The SAC header do not define the component or not clear at all, we can't define the direction!\n");
+			gain_factor = 0.059814;
+			break;
+		}
+	/* */
+		_flag    = 0;
+		baseline = 0.0;
+		for ( j = 0; j < npts; j++ ) {
+			if ( seis[i][j] == SACUNDEF ) {
+				seis[i][j] = 0.0;
+				_flag++;
+				continue;
 			}
-			else {
-				printf("The SAC header do not define the component or not clear at all, we can't define the direction!\n");
-				printf("Enter the direction (Z, N or E) for %s.%s.%s:\n", sh.kstnm, sh.kcmpnm, sh.knetwk);
-			}
-			scanf("%c", &sh.kcmpnm[2]);
-			flag = 2;
+			seis[i][j] *= gain_factor;
+			baseline   += seis[i][j];
 		}
-	} while ( flag );
-
-	flag = 0;
-	acc0 = 0.0;
-	vel0 = 0.0;
-	baseline = 0.0;
-/* Find the baseline */
-	for ( i = 0; i < npts; i++ ) {
-		if ( seis[i] == SACUNDEF ) {
-			seis[i] = 0.0;
-			flag++;
-			continue;
-		}
-		seis[i]  *= gain_factor;
-		baseline += seis[i];
-	}
-	baseline /= (float)(npts - flag);
-	max_seis  = 0.0;
-	max_pseis = 0.0;
-
-	for ( i = 0; i < npts; i++ ) {
-		if ( seis[i] != 0.0 )
-			seis[i] -= baseline;
-
-		if ( fabs(seis[i]) > max_seis )
-			max_seis = fabs(seis[i]);
-		if ( fabs(pseis[i]) > max_pseis )
-			max_pseis = fabs(pseis[i]);
+		baseline /= (float)(npts - _flag);
+	/* */
+		for ( j = 0; j < npts; j++ )
+			if ( seis[i][j] != 0.0 )
+				seis[i][j] -= baseline;
 	}
 
-	picker_wu(
-		seis, NULL, NULL, npts, sh.delta, 2, 0,
-		&pa, &sa, &pw, &sw
+/*
+ *
+ */
+	_flag = picker_wu(
+		seis[0], seis[1], seis[2], npts, sh.delta, 2, 0,
+		&p_arrival, &s_arrival, &p_weight, &s_weight
 	);
 
-	printf("%lf %lf %lf %lf\n", pa, sa, pw, sw);
+	if ( _flag == 0 ) {
+		fprintf(stderr, "Can't find the P arrival time, just skip this station.\n");
+		exit(0);
+	}
 
-	free(seis);
-	free(pseis);
+/*
+ *
+ */
+	datalen    = (int)(p_arrival / sh.delta);
+	pga        = 0.0;
+	pga4_time  = npts * sh.delta;
+	pga80_time = npts * sh.delta;
+	for ( i = 0; i < 3; i++ ) {
+		for ( j = datalen; j < npts; j++ ) {
+		/* */
+			if ( fabs(seis[i][j]) > 4.0 ) {
+			/* */
+				if ( (j * sh.delta) < pga4_time )
+					pga4_time = j * sh.delta;
+			/* */
+				if ( fabs(seis[i][j]) > 80.0 ) {
+					if ( (j * sh.delta) < pga80_time )
+						pga80_time = j * sh.delta;
+				}
+			}
+		/* */
+			if ( fabs(seis[i][j]) > pga ) {
+				pga      = fabs(seis[i][j]);
+				pga_time = j * sh.delta;
+			}
+		}
+	}
+
+/*
+ *
+ */
+	for ( i = 0; i < 3; i++ ) {
+		float pseis      = 0.0;
+		float seis_prev  = 0.0;
+		float pseis_prev = 0.0;
+		for ( j = 0; j < npts; j++ ) {
+			pseis      = (seis[i][j] + seis_prev) * sh.delta * 0.5 + pseis_prev;
+			seis_prev  = seis[i][j];
+			pseis_prev = pseis;
+		/* */
+			seis[i][j] = 0.0;
+		}
+	}
+
+/*
+ *
+ */
+	pgv = 0.0;
+	for ( i = 0; i < 3; i++ ) {
+		for ( j = datalen; j < npts; j++ ) {
+		/* */
+			if ( fabs(seis[i][j]) > pgv ) {
+				pgv      = fabs(seis[i][j]);
+				pgv_time = j * sh.delta;
+			}
+		}
+	}
+
+/*
+ *
+ */
+	for ( i = 0; i < 3; i++ ) {
+		float pseis      = 0.0;
+		float seis_prev  = 0.0;
+		float pseis_prev = 0.0;
+		for ( j = 0; j < npts; j++ ) {
+			pseis      = (seis[i][j] + seis_prev) * sh.delta * 0.5 + pseis_prev;
+			seis_prev  = seis[i][j];
+			pseis_prev = pseis;
+		/* */
+			seis[i][j] = 0.0;
+		}
+	}
+
+/*
+ *
+ */
+	pgd       = 0.0;
+	pd35_time = npts * sh.delta;
+	for ( i = 0; i < 3; i++ ) {
+		for ( j = datalen; j < npts; j++ ) {
+		/* */
+			if ( fabs(seis[i][j]) > 0.35 ) {
+				if ( (j * sh.delta) < pd35_time )
+					pd35_time = j * sh.delta;
+			}
+		/* */
+			if ( fabs(seis[i][j]) > pgd ) {
+				pgd      = fabs(seis[i][j]);
+				pgd_time = j * sh.delta;
+			}
+		}
+	}
+
+	pd3 = 0.0;
+	for ( j = datalen; j < datalen + 300; j++ ) {
+	/* */
+		if ( fabs(seis[i][j]) > pd3 )
+			pd3 = fabs(seis[i][j]);
+	}
+
+/*
+ *
+ */
+/* */
+	if ( pd35_time <= 0.0 && pga80_time <= 0.0 ) {
+		pga_leadtime = pgv_leadtime = 0.0;
+	}
+	else {
+	/* */
+		if ( (pga_time - pd35_time) <= (pga_time - pga80_time) )
+			pga_leadtime = pga_time - pga80_time;
+		else
+			pga_leadtime = pga_time - pd35_time;
+	/* */
+		if ( (pgv_time - pd35_time) <= (pgv_time - pga80_time) )
+			pgv_leadtime = pgv_time - pga80_time;
+		else
+			pgv_leadtime = pgv_time - pd35_time;
+	/* */
+		if ( pga_leadtime < 0.0 )
+			pga_leadtime = 0.0;
+		if ( pgv_leadtime < 0.0 )
+			pgv_leadtime = 0.0;
+	}
+/* */
+	for ( i = 0; i < 3; i++ )
+		free(seis[i]);
 
 	return 0;
 }
 
 
 /*
- * readSACHdr: read the header portion of a SAC file into memory.
+ * read_sac_header: read the header portion of a SAC file into memory.
  *  arguments: file pointer: pointer to an open file from which to read
  *             filename: pathname of open file, for logging.
  * returns: 0 on success
@@ -186,7 +279,7 @@ int main( int argc, char **argv )
  *         -1 on error reading file
  *     The file is left open in all cases.
  */
-static int readSACHdr(FILE *fp, struct SAChead *psh)
+static int read_sac_header(FILE *fp, struct SAChead *psh)
 {
 	int i;
 	struct SAChead2 *psh2;
@@ -201,7 +294,7 @@ static int readSACHdr(FILE *fp, struct SAChead *psh)
 	psh2 = (struct SAChead2 *)psh;
 
 	if ( fread(psh, sizeof(struct SAChead2), 1, fp) != 1 ) {
-		fprintf(stderr, "readSACHdr: error reading SAC file: %s\n", strerror(errno));
+		fprintf(stderr, "read_sac_header: error reading SAC file: %s\n", strerror(errno));
 		return -1;
 	}
 
@@ -212,9 +305,9 @@ static int readSACHdr(FILE *fp, struct SAChead *psh)
 		ret = 1;
 		fprintf(stderr, "WARNING: Swapping is needed! (fileSize %d, psh.npts %d)\n", fileSize, psh->npts);
 		for ( i=0; i<NUM_FLOAT; i++ )
-			Swap4ByteOrder( &(psh2->SACfloat[i]) );
+			swap_order_4byte( &(psh2->SACfloat[i]) );
 		for ( i=0; i<MAXINT; i++ )
-			Swap4ByteOrder( &(psh2->SACint[i]) );
+			swap_order_4byte( &(psh2->SACint[i]) );
 		if( fileSize != (sizeof(struct SAChead) + (psh->npts * sizeof(float))) ) {
 			fprintf(stderr, "ERROR: Swapping is needed again! (fileSize %d, psh.npts %d)\n", fileSize, psh->npts);
 			ret = -1;
@@ -227,7 +320,7 @@ static int readSACHdr(FILE *fp, struct SAChead *psh)
 }
 
 /* Do byte swapping on the given 4-byte integer or float. */
-static void Swap4ByteOrder( void *data )
+static void swap_order_4byte( void *data )
 {
    uint8_t temp;
 
