@@ -20,8 +20,8 @@
 #include "iirfilter.h"
 
 
-#define EV_LON 121.73f
-#define EV_LAT 24.10f
+#define EV_LON 120.54f
+#define EV_LAT 22.92f
 #define EV_DEP 14.6f
 
 #define PI  3.141592653589793238462643383279f
@@ -33,7 +33,7 @@ static float fetch_sac_time( const struct SAChead * );
 static int read_sac_header( FILE *, struct SAChead * );
 static void swap_order_4byte( void * );
 static float *integral_waveform( float *, const int, const double );
-static float *zero_phase_filter( float *, const int, const double );
+static float *highpass_filter( float *, const int, const double, const int );
 static float cal_tau_c( float *, const int, const float, const int );
 static double coor2distf( const double, const double, const double, const double );
 
@@ -451,7 +451,7 @@ static float *integral_waveform( float *input, const int npts, const double delt
 		input[i]   = this_pseis;
 	}
 /* */
-	zero_phase_filter( input, npts, delta );
+	highpass_filter( input, npts, delta, 0 );
 
 	return input;
 }
@@ -459,7 +459,7 @@ static float *integral_waveform( float *input, const int npts, const double delt
 /*
  *
  */
-static float *zero_phase_filter( float *input, const int npts, const double delta )
+static float *highpass_filter( float *input, const int npts, const double delta, const int zero_phase )
 {
 	int        i;
 	IIR_FILTER filter;
@@ -473,9 +473,11 @@ static float *zero_phase_filter( float *input, const int npts, const double delt
 		input[i] = applyfilter( input[i], &filter, stage );
 
 /* Second time, backward filtering */
-	//memset(stage, 0, sizeof(IIR_STAGE) * filter.nsects);
-	//for ( i = npts - 1; i >= 0; i-- )
-		//input[i] = applyfilter( input[i], &filter, stage );
+	if ( zero_phase ) {
+		memset(stage, 0, sizeof(IIR_STAGE) * filter.nsects);
+		for ( i = npts - 1; i >= 0; i-- )
+			input[i] = applyfilter( input[i], &filter, stage );
+	}
 
 	free(stage);
 
