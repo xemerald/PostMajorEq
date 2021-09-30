@@ -16,8 +16,10 @@
 #include <math.h>
 #include <time.h>
 #include <errno.h>
-#include "sachead.h"
-#include "iirfilter.h"
+/* */
+#include <sachead.h>
+#include <iirfilter.h>
+#include <picker_wu.h>
 
 
 #define EV_LON 120.54f
@@ -37,11 +39,7 @@ static float *highpass_filter( float *, const int, const double, const int );
 static float cal_tau_c( float *, const int, const float, const int );
 static double coor2distf( const double, const double, const double, const double );
 
-int picker_wu(
-	const float *, const float *, const float *, const int, const double, const int, const int,
-	double *, double *, double *, double *
-);
-
+/* */
 typedef struct {
 /* Fixed information */
 	char sta[8];
@@ -87,11 +85,13 @@ int main( int argc, char **argv )
 
 /* Final output data */
 	float epic_dist;
-	float pga, pgv, pgd, pd3, tc;
+	float pga, pgv, pgd;
+	float pa3, pv3, pd3, tc;
 	float pga_time, pgv_time, pgd_time;
 	float pd35_time, pga80_time, pga4_time, pga2_time;
 	float pga_leadtime, pgv_leadtime;
-	double p_arrival, s_arrival, p_weight, s_weight;
+
+	double snr;
 
 /* Check command line arguments */
 	if ( argc != 2 ) {
@@ -197,24 +197,24 @@ int main( int argc, char **argv )
 		}
 
 	/* */
-		_flag = picker_wu(
-			seis[0], seis[1], seis[2], npts, delta, 2, 0,
-			&p_arrival, &s_arrival, &p_weight, &s_weight
-		);
+		_flag = 0;
+		if ( (nparrival = pickwu_p_arrival_pick( seis[0], npts, delta, 2, 0 )) ) {
+			if ( pickwu_p_trigger_check( seis[0], npts, delta, nparrival ) ) {
+				if ( pickwu_p_arrival_quality_calc( seis[0], npts, delta, nparrival, &snr ) <= 3 ) {
+					_flag = 1;
+				}
+			}
+		}
 
 		if ( _flag == 0 ) {
 			fprintf(stderr, "Can't find the P arrival time, just skip this station.\n");
-			//exit(0);
 			continue;
 		}
-		else {
-			//fprintf(stdout, "P arrival at %lf.\n", p_arrival);
-		}
+
 
 	/*
 	 *
 	 */
-		nparrival  = (int)(p_arrival / delta);
 		pga        = 0.0;
 		pga4_time  = npts * delta;
 		pga80_time = npts * delta;
@@ -238,6 +238,13 @@ int main( int argc, char **argv )
 				}
 			}
 		}
+	/* */
+		pa3 = 0.0;
+		for ( i = nparrival; i < nparrival + samprate * 3; i++ ) {
+		/* */
+			if ( fabs(seis[0][i]) > pa3 )
+				pa3 = fabs(seis[0][i]);
+		}
 
 	/* Transform the acceleration sample to velocity sample */
 		for ( i = 0; i < 3; i++ )
@@ -252,6 +259,13 @@ int main( int argc, char **argv )
 					pgv_time = j * delta;
 				}
 			}
+		}
+	/* */
+		pv3 = 0.0;
+		for ( i = nparrival; i < nparrival + samprate * 3; i++ ) {
+		/* */
+			if ( fabs(seis[0][i]) > pv3 )
+				pv3 = fabs(seis[0][i]);
 		}
 
 	/* Transform the velocity sample to displacement sample */
