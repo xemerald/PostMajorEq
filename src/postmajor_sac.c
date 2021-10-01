@@ -79,6 +79,8 @@ int main( int argc, char **argv )
 		fprintf(stderr, "Error opening station list %s\n", argv[2]);
 		exit(1);
 	}
+/* */
+	fprintf(stdout, "# Station  PGA  PGV  PGD  PA3  PV3  PD3  TauC3  PGA_Leading  PGV_Leading  Epc_Dist  S/N_Ratio\n");
 
 /* */
 	while ( fgets(list_line, sizeof(list_line) - 1, fd) != NULL ) {
