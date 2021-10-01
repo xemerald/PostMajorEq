@@ -1,0 +1,11 @@
+# Field description (Please use UTC time as input):
+#    Year  Month  Day  Hour  Minute  Second(Float)  Latitude(Float)  Longitude(Float)  Depth(Float, Km)
+#
+# Example:
+#    2018   02   06   15   50   41.6   24.10   121.73   6.3
+#
+# Note:
+#     The program will skip the line begin with '#', therefore you can comment out the line you don't want to
+#     use in the following analyzation.
+#
+2018   02   06   15   50   41.6   24.10   121.73   6.3

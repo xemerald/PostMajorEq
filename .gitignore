@@ -10,3 +10,6 @@
 
 # Ignore the testing files.
 test*
+
+# Ignore the execute files.
+postmajor

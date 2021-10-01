@@ -1,19 +1,17 @@
 #
 #
 #
+CFLAG = /usr/bin/gcc -Wall -O3 -flto -g -I./include
 BIN_NAME = postmajor
-CFLAGS = $(GLOBALFLAGS) -O2 -g -I./include -flto
-
-UTILITY = iirfilter.o picker_wu.o
-
-SRC = postmajor_sac.c iirfilter.c picker_wu.c
+SRC = ./src/
+UTILITY = iirfilter.o picker_wu.o sac_proc.o
 
 postmajor_sac: postmajor_sac.o $(UTILITY)
-	$(CC) $(CFLAGS) -o $(BIN_NAME) postmajor_sac.o $(UTILITY) -lm
+	$(CFLAG) -o $(BIN_NAME) postmajor_sac.o $(UTILITY) -lm
 
 # Compile rule for Object
-.c.o:
-	$(CC) $(CFLAGS) -c $<
+%.o:$(SRC)%.c
+	$(CFLAG) -c $< -o $@
 
 # Clean-up rules
 clean:

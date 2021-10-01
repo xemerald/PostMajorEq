@@ -1,6 +1,7 @@
 /*
  *
  */
+
 /* */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,8 +19,6 @@ static inline double characteristic_func_2( const double, const double );
 int pickwu_p_arrival_pick(
 	const float *input_z, const int np, const double delta, const int cf_flag, const int p_start
 ) {
-	const int samprate = (int)(1.0 / delta);
-
 	int   pos_trigger = 0;
 	int   pos_tmp     = 0;
 	int   result      = 0;
