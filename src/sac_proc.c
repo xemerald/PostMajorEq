@@ -70,7 +70,7 @@ int sac_proc_station_data_extract(
 				*npts = (int)sh.npts;
 		}
 	/* Read the sac data into a buffer */
-		tmp = *npts * sizeof(float);
+		tmp = sh.npts * sizeof(float);
 		if ( (_seis = (float *)malloc((size_t)tmp)) == (float *)NULL ) {
 			fprintf(stderr, "Out of memory for %d float samples\n", *npts);
 			fclose(fd);
@@ -85,7 +85,7 @@ int sac_proc_station_data_extract(
 		fclose(fd);
 	/* */
 		if ( swap_flag == 1 )
-			for ( j = 0; j < *npts; j++ )
+			for ( j = 0; j < sh.npts; j++ )
 				swap_order_4byte( &(_seis[j]) );
 
 	/* */
