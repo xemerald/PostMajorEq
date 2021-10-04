@@ -72,11 +72,11 @@ int sac_proc_station_data_extract(
 	/* Read the sac data into a buffer */
 		tmp = sh.npts * sizeof(float);
 		if ( (_seis = (float *)malloc((size_t)tmp)) == (float *)NULL ) {
-			fprintf(stderr, "Out of memory for %d float samples\n", *npts);
+			fprintf(stderr, "Out of memory for %d float samples\n", sh.npts);
 			fclose(fd);
 			return -3;
 		}
-		if ( (tmp = (int)fread(_seis, sizeof(float), sh.npts, fd)) != *npts ) {
+		if ( (tmp = (int)fread(_seis, sizeof(float), sh.npts, fd)) != sh.npts ) {
 			fprintf(stderr, "Error reading SAC data: %s\n", strerror(errno));
 			fclose(fd);
 			free(_seis);
