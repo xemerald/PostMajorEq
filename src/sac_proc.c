@@ -65,8 +65,9 @@ int sac_proc_station_data_extract(
 			*npts = (int)sh.npts;
 		}
 		else if ( *npts != (int)sh.npts ) {
-			fprintf(stderr, "ERROR! There is a different npts within the SAC files of %s.\n", sta);
-			return -2;
+			fprintf(stderr, "WARNING! There is a different npts within the SAC files of %s.\n", sta);
+			if ( (int)sh.npts < *npts )
+				*npts = (int)sh.npts;
 		}
 	/* Read the sac data into a buffer */
 		tmp = *npts * sizeof(float);
