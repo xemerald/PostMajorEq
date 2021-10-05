@@ -20,6 +20,7 @@
 #include <sac_proc.h>
 
 /* */
+#define  EV_DURATION     180
 #define  MAX_STR_SIZE    512
 
 #define  PI  3.141592653589793238462643383279f
@@ -27,7 +28,7 @@
 
 /* Internal Function Prototypes */
 static int    parse_stalist_line( const char *, char *, float *, float *, float *, float [] );
-static int    parse_eqinfo_file( const char *, float *, float *, float *, float * );
+static int    parse_eqinfo_file( const char *, float *, float *, float *, double * );
 static float *integral_waveform( float *, const int, const double );
 static float *highpass_filter( float *, const int, const double, const int );
 static float  calc_tau_c( const float *, const int, const float, const int );
@@ -40,22 +41,25 @@ static double coor2distf( const double, const double, const double, const double
 int main( int argc, char **argv )
 {
 	int    i, j;
+	int    end_pos = 0;
 	FILE  *fd;
 	char   list_line[MAX_STR_SIZE] = { 0 };
 	char   sta_c[8] = { 0 };
 	float *seis[3];       /* input trace buffer */
 /* */
-	int   eq_flag = 0;
-	float otime, elat, elon, edep;
+	int    eq_flag = 0;
+	float  elat, elon, edep;
+	double otime;
 /* */
-	int   flag = 0;
-	int   npts;
-	float delta = -1.0;
-	float gain[3];
-	float starttime;
-	float lat, lon, elev;
+	int    flag = 0;
+	int    npts;
+	float  delta = -1.0;
+	float  gain[3];
+	float  lat, lon, elev;
+	double starttime;
 
 /* Derived from waveform */
+	int    start_pick;
 	int    nparrival;
 	float  epic_dist;
 	float  pga, pgv, pgd;
@@ -71,7 +75,8 @@ int main( int argc, char **argv )
 		exit(0);
 	}
 /* */
-	if ( !parse_eqinfo_file( argv[1], &otime, &elat, &elon, &edep ) ) {
+	otime = 0.0;
+	if ( !parse_eqinfo_file( argv[1], &elat, &elon, &edep, &otime ) ) {
 		eq_flag = 1;
 	}
 /* */
@@ -102,9 +107,13 @@ int main( int argc, char **argv )
 			stderr, "Processing data of %s (start at %lf, npts %d, delta %.2lf)... \n",
 			sta_c, starttime, npts, delta
 		);
+	/* Set the time before origin time 1 sec. as the start point for scaning */
+		start_pick = (int)((otime - starttime - 1.0) / delta);
+		if ( start_pick < 0 )
+			start_pick = 0;
 	/* */
 		flag = 0;
-		if ( (nparrival = pickwu_p_arrival_pick( seis[0], npts, delta, 2, 0 )) ) {
+		if ( (nparrival = pickwu_p_arrival_pick( seis[0], npts, delta, 2, start_pick )) ) {
 			if ( pickwu_p_trigger_check( seis[0], npts, delta, nparrival ) ) {
 				if ( pickwu_p_arrival_quality_calc( seis[0], npts, delta, nparrival, &snr ) < 4 ) {
 					flag = 1;
@@ -119,15 +128,17 @@ int main( int argc, char **argv )
 			continue;
 		}
 
-	/*
-	 *
-	 */
+	/* */
+		end_pos = nparrival + (int)(EV_DURATION / delta) + 1;
+		if ( end_pos > npts )
+			end_pos = npts;
+	/* */
 		pga        = 0.0;
 		pga_time   = 0.0;
 		pga4_time  = npts * delta;
 		pga80_time = npts * delta;
 		for ( i = 0; i < 3; i++ ) {
-			for ( j = nparrival; j < npts; j++ ) {
+			for ( j = nparrival; j < end_pos; j++ ) {
 			/* */
 				if ( fabs(seis[i][j]) > 4.0 ) {
 				/* */
@@ -147,7 +158,7 @@ int main( int argc, char **argv )
 			}
 		}
 	/* */
-		pa3 = calc_peak_value( seis[0] + nparrival, npts, delta, 3 );
+		pa3 = calc_peak_value( seis[0] + nparrival, end_pos, delta, 3 );
 
 	/* Transform the acceleration sample to velocity sample */
 		for ( i = 0; i < 3; i++ )
@@ -156,7 +167,7 @@ int main( int argc, char **argv )
 		pgv      = 0.0;
 		pgv_time = 0.0;
 		for ( i = 0; i < 3; i++ ) {
-			for ( j = nparrival; j < npts; j++ ) {
+			for ( j = nparrival; j < end_pos; j++ ) {
 			/* */
 				if ( fabs(seis[i][j]) > pgv ) {
 					pgv      = fabs(seis[i][j]);
@@ -165,7 +176,7 @@ int main( int argc, char **argv )
 			}
 		}
 	/* */
-		pv3 = calc_peak_value( seis[0] + nparrival, npts, delta, 3 );
+		pv3 = calc_peak_value( seis[0] + nparrival, end_pos, delta, 3 );
 
 	/* Transform the velocity sample to displacement sample */
 		for ( i = 0; i < 3; i++ )
@@ -175,7 +186,7 @@ int main( int argc, char **argv )
 		pgd_time  = 0.0;
 		pd35_time = npts * delta;
 		for ( i = 0; i < 3; i++ ) {
-			for ( j = nparrival; j < npts; j++ ) {
+			for ( j = nparrival; j < end_pos; j++ ) {
 			/* */
 				if ( fabs(seis[i][j]) > 0.35 ) {
 					if ( (j * delta) < pd35_time )
@@ -189,12 +200,9 @@ int main( int argc, char **argv )
 			}
 		}
 	/* Computation of Pd & Tau-c at 3 seconds */
-		pd3 = calc_peak_value( seis[0] + nparrival, npts, delta, 3 );
-		tc  = calc_tau_c( seis[0] + nparrival, npts, delta, 3 );
+		pd3 = calc_peak_value( seis[0] + nparrival, end_pos, delta, 3 );
+		tc  = calc_tau_c( seis[0] + nparrival, end_pos, delta, 3 );
 
-	/*
-	 *
-	 */
 	/* */
 		if ( pd35_time <= 0.0 && pga80_time <= 0.0 ) {
 			pga_leadtime = pgv_leadtime = 0.0;
@@ -269,7 +277,7 @@ static int parse_stalist_line( const char *line, char *sta, float *lat, float *l
 /*
  *
  */
-static int parse_eqinfo_file( const char *path, float *otime, float *epc_lat, float *epc_lon, float *dep )
+static int parse_eqinfo_file( const char *path, float *epc_lat, float *epc_lon, float *dep, double *otime )
 {
 	int   i;
 	FILE *fd;
@@ -309,8 +317,9 @@ static int parse_eqinfo_file( const char *path, float *otime, float *epc_lat, fl
 						_otime.tm_sec   = 0;
 						_otime.tm_isdst = 0;
 
-						*dep   = -(*dep);
-						*otime = (double)timegm(&_otime) + sec;
+						*dep    = -(*dep);
+						*otime  = (double)timegm(&_otime);
+						*otime += sec;
 
 						fclose(fd);
 						return 0;

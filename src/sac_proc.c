@@ -16,17 +16,17 @@
 #include <sachead.h>
 
 /* Internal Function Prototypes */
-static int   read_sac_header( FILE *, struct SAChead * );
-static void  swap_order_4byte( void * );
-static void  preprocess_sac_data( float *, const int, const float );
-static float fetch_sac_time( const struct SAChead * );
-static char *trim_sac_string( char *, const int );
+static int    read_sac_header( FILE *, struct SAChead * );
+static void   swap_order_4byte( void * );
+static void   preprocess_sac_data( float *, const int, const float );
+static double fetch_sac_time( const struct SAChead * );
+static char  *trim_sac_string( char *, const int );
 
 /*
  *
  */
 int sac_proc_station_data_extract(
-	const char *sta, const char *path, const float gain[], float *seis[], int *npts, float *delta, float *starttime
+	const char *sta, const char *path, const float gain[], float *seis[], int *npts, float *delta, double *starttime
 ) {
 /* */
 	const char *chan[] = {
@@ -186,10 +186,10 @@ static void swap_order_4byte( void *data )
 /*
  *
  */
-static float fetch_sac_time( const struct SAChead *sh )
+static double fetch_sac_time( const struct SAChead *sh )
 {
 	struct tm tms;
-    double sec;
+    double result;
 
     tms.tm_year  = sh->nzyear - 1900;
     tms.tm_mon   = 0;           /* Force the month to January */
@@ -198,9 +198,10 @@ static float fetch_sac_time( const struct SAChead *sh )
     tms.tm_min   = sh->nzmin;
     tms.tm_sec   = sh->nzsec;
     tms.tm_isdst = 0;
-    sec          = (double)timegm(&tms);
+    result       = (double)timegm(&tms);
+	result      += sh->nzmsec / 1000.0;
 
-    return (sec + (sh->nzmsec / 1000.0));
+    return result;
 }
 
 /*
