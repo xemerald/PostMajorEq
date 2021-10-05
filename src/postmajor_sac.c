@@ -85,7 +85,10 @@ int main( int argc, char **argv )
 		exit(1);
 	}
 /* */
-	fprintf(stdout, "# Station  PGA  PGV  PGD  PA3  PV3  PD3  TauC3  PGA_Leading  PGV_Leading  Epc_Dist  S/N_Ratio\n");
+	fprintf(
+		stdout,
+		"#Sta     PGA     PGV     PGD     PA3     PV3     PD3   TauC3  PGA_LT  PGV_LT  E_Dist       SNR\n"
+	);
 
 /* */
 	while ( fgets(list_line, sizeof(list_line) - 1, fd) != NULL ) {
@@ -235,7 +238,7 @@ int main( int argc, char **argv )
 			epic_dist = 0.0;
 
 		fprintf(
-			stdout, "%s %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf\n",
+			stdout, "%s %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %9.2lf\n",
 			sta_c, pga, pgv, pgd, pa3, pv3, pd3, tc, pga_leadtime, pgv_leadtime, epic_dist, snr
 		);
 	}

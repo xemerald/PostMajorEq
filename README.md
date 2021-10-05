@@ -16,7 +16,7 @@ Please refer to the example files.
 
 ## Output field description
 ```
-Station  PGA  PGV  PGD  PA3  PV3  PD3  TauC3  PGA_Leading  PGV_Leading  Epc_Dist  S/N_Ratio
+<Station>  <PGA>  <PGV>  <PGD>  <PA3>  <PV3>  <PD3>  <TauC3>  <PGA Leading>  <PGV Leading>  <Epc. Dist.>  <S/N Ratio>
 ```
 
 ### Underconstruction...
