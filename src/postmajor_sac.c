@@ -87,7 +87,7 @@ int main( int argc, char **argv )
 /* */
 	fprintf(
 		stdout,
-		"#Sta     PGA     PGV     PGD     PA3     PV3     PD3   TauC3  PGA_LT  PGV_LT  E_Dist       SNR\n"
+		"#Sta         PGA         PGV         PGD         PA3         PV3         PD3       TauC3      PGA_LT      PGV_LT      E_Dist           SNR\n"
 	);
 
 /* */
@@ -238,7 +238,7 @@ int main( int argc, char **argv )
 			epic_dist = 0.0;
 
 		fprintf(
-			stdout, "%s %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %7.2lf %9.2lf\n",
+			stdout, "%s %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %13.6lf\n",
 			sta_c, pga, pgv, pgd, pa3, pv3, pd3, tc, pga_leadtime, pgv_leadtime, epic_dist, snr
 		);
 	}
