@@ -13,3 +13,4 @@ test*
 
 # Ignore the execute files.
 postmajor
+chan_mod

@@ -20,9 +20,16 @@
 #include <sac_proc.h>
 
 /* */
+#define  OUTPUT_FILE_HEADER \
+		"#Sta         PGA         PGV         PGD         PA3         PV3         PD3       TauC3      " \
+		"PGA_LT      PGV_LT      E_Dist           SNR\n"
+/* */
+#define  OUTPUT_DATA_FORMAT \
+		"%s %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %13.6lf\n"
+/* */
 #define  EV_DURATION     180
 #define  MAX_STR_SIZE    512
-
+/* */
 #define  PI  3.141592653589793238462643383279f
 #define  PI2 6.283185307179586476925286766559f
 
@@ -85,10 +92,7 @@ int main( int argc, char **argv )
 		exit(1);
 	}
 /* */
-	fprintf(
-		stdout,
-		"#Sta         PGA         PGV         PGD         PA3         PV3         PD3       TauC3      PGA_LT      PGV_LT      E_Dist           SNR\n"
-	);
+	fprintf(stdout, OUTPUT_FILE_HEADER);
 
 /* */
 	while ( fgets(list_line, sizeof(list_line) - 1, fd) != NULL ) {
@@ -238,7 +242,7 @@ int main( int argc, char **argv )
 			epic_dist = 0.0;
 
 		fprintf(
-			stdout, "%s %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %13.6lf\n",
+			stdout, OUTPUT_DATA_FORMAT,
 			sta_c, pga, pgv, pgd, pa3, pv3, pd3, tc, pga_leadtime, pgv_leadtime, epic_dist, snr
 		);
 	}

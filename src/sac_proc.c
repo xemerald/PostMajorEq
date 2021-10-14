@@ -14,6 +14,7 @@
 #include <float.h>
 /* */
 #include <sachead.h>
+#include <sac_proc.h>
 
 /* Internal Function Prototypes */
 static int    read_sac_header( FILE *, struct SAChead * );
@@ -33,12 +34,10 @@ int sac_proc_station_data_extract(
 		"HLZ", "HLN", "HLE"
 	};
 
-	FILE  *fd;
 	char   filename[512] = { 0 };
 	struct SAChead sh;
 
-	int    i, j, tmp;
-	int    swap_flag;
+	int    i;
 	float *_seis = NULL;
 
 /* Just a initialization */
@@ -52,14 +51,9 @@ int sac_proc_station_data_extract(
 	for ( i = 0; i < 3; i++ ) {
 	/* Opening the SAC files */
 		sprintf(filename, "%s/%s.%s.TW.--", path, sta, chan[i]);
-		if ( (fd = fopen(filename, "rb")) == (FILE *)NULL ) {
-			fprintf(stderr, "Error opening %s\n", filename);
+		if ( sac_proc_sac_load( filename, &sh, &_seis ) < 0 )
 			return -1;
-		}
-		if ( (swap_flag = read_sac_header(fd, &sh)) < 0 ) {
-			fclose(fd);
-			return -1;
-		}
+
 	/* Check the consistency of npts */
 		if ( *npts < 0 ) {
 			*npts = (int)sh.npts;
@@ -69,25 +63,6 @@ int sac_proc_station_data_extract(
 			if ( (int)sh.npts < *npts )
 				*npts = (int)sh.npts;
 		}
-	/* Read the sac data into a buffer */
-		tmp = sh.npts * sizeof(float);
-		if ( (_seis = (float *)malloc((size_t)tmp)) == (float *)NULL ) {
-			fprintf(stderr, "Out of memory for %d float samples\n", sh.npts);
-			fclose(fd);
-			return -3;
-		}
-		if ( (tmp = (int)fread(_seis, sizeof(float), sh.npts, fd)) != sh.npts ) {
-			fprintf(stderr, "Error reading SAC data: %s\n", strerror(errno));
-			fclose(fd);
-			free(_seis);
-			return -1;
-		}
-		fclose(fd);
-	/* */
-		if ( swap_flag == 1 )
-			for ( j = 0; j < sh.npts; j++ )
-				swap_order_4byte( &(_seis[j]) );
-
 	/* */
 		if ( *delta < 0.0 ) {
 			*delta = sh.delta;
@@ -113,6 +88,117 @@ int sac_proc_station_data_extract(
 	}
 
 	return 0;
+}
+
+/*
+ *
+ */
+int sac_proc_sac_load( const char *filename, struct SAChead *sh, float **seis )
+{
+	FILE  *fd;
+	float *_seis = NULL;
+	int    i, swap_flag, tmp;
+	int    result;
+
+/* */
+	if ( (fd = fopen(filename, "rb")) == (FILE *)NULL ) {
+		fprintf(stderr, "Error opening %s\n", filename);
+		return -1;
+	}
+	if ( (swap_flag = read_sac_header(fd, sh)) < 0 ) {
+		fclose(fd);
+		return -1;
+	}
+/* Read the sac data into a buffer */
+	result = tmp = sh->npts * sizeof(float);
+	if ( (_seis = (float *)malloc((size_t)tmp)) == (float *)NULL ) {
+		fprintf(stderr, "Out of memory for %d float samples\n", sh->npts);
+		fclose(fd);
+		return -3;
+	}
+	if ( (tmp = (int)fread(_seis, sizeof(float), sh->npts, fd)) != sh->npts ) {
+		fprintf(stderr, "Error reading SAC data: %s\n", strerror(errno));
+		fclose(fd);
+		free(_seis);
+		return -1;
+	}
+/* */
+	if ( swap_flag == 1 )
+		for ( i = 0; i < sh->npts; i++ )
+			swap_order_4byte( &(_seis[i]) );
+
+/* */
+	*seis   = _seis;
+	result += sizeof(struct SAChead);
+	fclose(fd);
+
+	return result;
+}
+
+/*
+ *
+ */
+struct SAChead *sac_proc_scnl_modify(
+	struct SAChead *sh, const char *n_sta, const char *n_chan, const char *n_net, const char *n_loc
+) {
+	int i;
+
+/* Station name */
+	if ( n_sta != NULL ) {
+		strncpy(sh->kstnm, n_sta, strlen(n_sta));
+		for ( i = (int)strlen(n_sta); i < K_LEN; i++ )
+			sh->kstnm[i] = ' ';
+	}
+/* Channel code */
+	if ( n_chan != NULL ) {
+		strncpy(sh->kcmpnm, n_chan, strlen(n_chan));
+		for ( i = (int)strlen(n_chan); i < K_LEN; i++ )
+			sh->kcmpnm[i] = ' ';
+	}
+/* Network code */
+	if ( n_net != NULL ) {
+		strncpy(sh->knetwk, n_net, strlen(n_net));
+		for ( i = (int)strlen(n_net); i < K_LEN; i++ )
+			sh->knetwk[i] = ' ';
+	}
+/* Location code */
+	if ( n_loc != NULL ) {
+		strncpy(sh->khole, n_loc, strlen(n_loc));
+		for ( i = (int)strlen(n_loc); i < K_LEN; i++ )
+			sh->khole[i] = ' ';
+	}
+
+	return sh;
+}
+
+/*
+ *
+ */
+const char *sac_proc_scnl_print( struct SAChead *sh )
+{
+	static char result[64] = { 0 };
+
+	char sta[K_LEN]  = { 0 };
+	char chan[K_LEN] = { 0 };
+	char net[K_LEN]  = { 0 };
+	char loc[K_LEN]  = { 0 };
+
+/* */
+	strncpy(sta, sh->kstnm, K_LEN);
+	trim_sac_string( sta, K_LEN );
+/* */
+	strncpy(chan, sh->kcmpnm, K_LEN);
+	trim_sac_string( chan, K_LEN );
+/* */
+	strncpy(net, sh->knetwk, K_LEN);
+	trim_sac_string( net, K_LEN );
+/* */
+	strncpy(loc, sh->khole, K_LEN);
+	trim_sac_string( loc, K_LEN );
+
+	sprintf(result, "%s.%s.%s.%s", sta, chan, net, loc);
+
+	return result;
 }
 
 /*

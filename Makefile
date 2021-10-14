@@ -6,8 +6,13 @@ BIN_NAME = postmajor
 SRC = ./src/
 UTILITY = iirfilter.o picker_wu.o sac_proc.o
 
+all: postmajor_sac chan_mod
+
 postmajor_sac: postmajor_sac.o $(UTILITY)
 	$(CFLAG) -o $(BIN_NAME) postmajor_sac.o $(UTILITY) -lm
+
+chan_mod: chan_mod.o sac_proc.o
+	$(CFLAG) -o chan_mod chan_mod.o sac_proc.o
 
 # Compile rule for Object
 %.o:$(SRC)%.c
