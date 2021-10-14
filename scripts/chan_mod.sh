@@ -16,7 +16,7 @@ fi
 #
 EV_YMD=`printf "%d%02d%02d" $1 $2 $3`
 EV_HM=`printf "%02d%02d %02d%02d %02d%02d" $4 $[$5 - 3] $4 $[$5 - 2] $4 $[$5 - 1]`
-FILEPATH=${SRC_DIR}/EVENTS_NTU/${EV_YMD:0:6}
+FILEPATH=${SRC_DIR}/unarranged/${EV_YMD:0:6}
 SAC_DIR=''
 #
 for _EV_HM in ${EV_HM}
