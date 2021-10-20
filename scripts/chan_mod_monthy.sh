@@ -31,17 +31,6 @@ do
 		#tar -C ${TMP_DIR} -vjxf ${TMP_DIR}/${SAC_DIR}
 		#rm -f ${TMP_DIR}/${SAC_DIR}
 		chan_mod_dir.sh ${TMP_DIR}/${dir}
-		#echo "Listing all the P-Alert archived SAC files..."
-		#FILELIST=`cd ${TMP_DIR}/${dir}; ls | grep "[A-Z][0-9]\{2,3\}[A-F]\{0,1\}.HH[ZNE].TW.--"`
-		#for file in ${FILELIST}
-		#do
-			#NEW_CHAN=`echo ${file} | cut -d. -f2 | sed 's/HH/HL/'`
-			#chan_mod ${TMP_DIR}/${dir}/${file} ${NEW_CHAN} ${TMP_DIR}/${dir}
-			#rm -f ${TMP_DIR}/${dir}/${file}
-		#done
-		#
-		#echo "Listing all the new archived SAC files..."
-		#cd ${TMP_DIR}/${dir}; echo "# SAC files list" > saclist; ls *.*.*.* >> saclist; cd -
 		#
 		echo "Compressing all archived SAC files..."
 		cd ${TMP_DIR}; tar -vjcf ${dir}.tar.bz2 ${dir}; cd -
