@@ -8,7 +8,7 @@ then
 fi
 
 echo "Listing all the P-Alert archived SAC files..."
-FILELIST=`cd ${1}; ls | grep "[A-Z][0-9]\{2,3\}[A-F]\{0,1\}.HH[ZNE].TW.--"`
+FILELIST=`cd ${1}; ls | grep "^[DHLPSTW][0-9]\{2,3\}[A-F]\{0,1\}\.HH[ZNE]\.TW\.--"`
 for file in ${FILELIST}
 do
 	NEW_CHAN=`echo ${file} | cut -d. -f2 | sed 's/HH/HL/'`
