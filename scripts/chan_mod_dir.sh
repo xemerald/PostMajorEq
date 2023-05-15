@@ -18,3 +18,4 @@ done
 #
 echo "Listing all the new archived SAC files..."
 cd ${1}; echo "# SAC files list" > saclist; ls *.*.*.* >> saclist; cd -
+exit

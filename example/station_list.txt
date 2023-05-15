@@ -1,11 +1,11 @@
 # Field description:
-#    Station_Code  Latitude  Longitude  Elevation  Gain_Factor_Z  Gain_Factor_N  Gain_Factor_E
+#    Station  Network  Location  Latitude  Longitude  Elevation  Channel_0  Gain_Factor_0  Channel_1  Gain_Factor_1  Channel_2  Gain_Factor_2
 #
 # Example:
-#    D001    23.894972    121.542278    41.0    0.05981400    0.05981400    0.05981400
+#    D001    TW    --    23.894972    121.542278    41.0    HLZ    0.05981400    HLN    0.05981400    HLE    0.05981400
 #
 # Note:
-#     The program will skip the line begin with '#', therefore you can comment out the line you don't want to
-#     use in the following analyzation.
+#    The program will skip the line begin with '#', therefore you can comment out the line you don't want to
+#    use in the following analyzation.
 #
-D001    23.894972    121.542278    41.0    0.05981400    0.05981400    0.05981400
+D001    TW    --    23.894972    121.542278    41.0    HLZ    0.05981400    HLN    0.05981400    HLE    0.05981400

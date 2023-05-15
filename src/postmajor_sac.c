@@ -34,7 +34,7 @@
 #define  PI2 6.283185307179586476925286766559f
 
 /* Internal Function Prototypes */
-static int    parse_stalist_line( const char *, char *, float *, float *, float *, float [] );
+static int    parse_stalist_line( const char *, char *, char *, char *, char *[], float *, float *, float *, float [] );
 static int    parse_eqinfo_file( const char *, float *, float *, float *, double * );
 static float *integral_waveform( float *, const int, const double );
 static float *highpass_filter( float *, const int, const double, const int );
@@ -52,6 +52,9 @@ int main( int argc, char **argv )
 	FILE  *fd;
 	char   list_line[MAX_STR_SIZE] = { 0 };
 	char   sta_c[8] = { 0 };
+	char   net_c[3] = { 0 };
+	char   loc_c[3] = { 0 };
+	char  *chan_c[3] = { NULL };
 	float *seis[3];       /* input trace buffer */
 /* */
 	int    eq_flag = 0;
@@ -92,15 +95,18 @@ int main( int argc, char **argv )
 		exit(1);
 	}
 /* */
+	for ( i = 0; i < 3; i++ )
+		chan_c[i] = (char *)malloc(4);
+/* */
 	fprintf(stdout, OUTPUT_FILE_HEADER);
 
 /* */
 	while ( fgets(list_line, sizeof(list_line) - 1, fd) != NULL ) {
 	/* */
-		if ( parse_stalist_line( list_line, sta_c, &lat, &lon, &elev, gain ) )
+		if ( parse_stalist_line( list_line, sta_c, net_c, loc_c, chan_c, &lat, &lon, &elev, gain ) )
 			continue;
 	/* */
-		if ( sac_proc_station_data_extract( sta_c, argv[3], gain, seis, &npts, &delta, &starttime ) ) {
+		if ( sac_proc_station_data_extract( sta_c, net_c, loc_c, (const char **)chan_c, argv[3], gain, seis, &npts, &delta, &starttime ) ) {
 			for ( i = 0; i < 3; i++ ) {
 				if ( seis[i] != NULL ) {
 					free(seis[i]);
@@ -111,15 +117,16 @@ int main( int argc, char **argv )
 		}
 
 		fprintf(
-			stderr, "Processing data of %s (start at %lf, npts %d, delta %.2lf)... \n",
-			sta_c, starttime, npts, delta
+			stderr, "Processing data of %s.%s.%s (start at %lf, npts %d, delta %.2lf)... \n",
+			sta_c, net_c, loc_c, starttime, npts, delta
 		);
 	/* Set the time before origin time 1 sec. as the start point for scaning */
-		start_pick = (int)((otime - starttime - 1.0) / delta);
+		start_pick = (int)((otime - starttime) / delta);
 		if ( start_pick < 0 )
 			start_pick = 0;
 	/* */
 		flag = 0;
+		snr = 0.0;
 		if ( (nparrival = pickwu_p_arrival_pick( seis[0], npts, delta, 2, start_pick )) ) {
 			if ( pickwu_p_trigger_check( seis[0], npts, delta, nparrival ) ) {
 				if ( pickwu_p_arrival_quality_calc( seis[0], npts, delta, nparrival, &snr ) < 4 ) {
@@ -129,10 +136,10 @@ int main( int argc, char **argv )
 		}
 		if ( flag == 0 ) {
 			fprintf(
-				stderr, "Can't find valid P arrival time (SNR: %lf), just skip the station %s.\n",
-				snr, sta_c
+				stderr, "Can't find valid P arrival time (Np: %d, SNR: %lf), skip those time related parameters for station %s.%s.%s.\n",
+				nparrival, snr, sta_c, net_c, loc_c
 			);
-			continue;
+			nparrival = start_pick;
 		}
 
 	/* */
@@ -211,8 +218,11 @@ int main( int argc, char **argv )
 		tc  = calc_tau_c( seis[0] + nparrival, end_pos, delta, 3 );
 
 	/* */
-		if ( pd35_time <= 0.0 && pga80_time <= 0.0 ) {
-			pga_leadtime = pgv_leadtime = 0.0;
+		if ( !flag || pd35_time <= 0.0 && pga80_time <= 0.0 ) {
+			pga_leadtime = pgv_leadtime = -1.0;
+			if ( !flag ) {
+				pa3 = pv3 = pd3 = tc = -1.0;
+			}
 		}
 		else {
 		/* */
@@ -255,8 +265,10 @@ int main( int argc, char **argv )
 /*
  *
  */
-static int parse_stalist_line( const char *line, char *sta, float *lat, float *lon, float *elev, float gain[] )
-{
+static int parse_stalist_line(
+	const char *line, char *sta, char *net, char *loc, char *chan[],
+	float *lat, float *lon, float *elev, float gain[]
+) {
 	int i;
 
 /* */
@@ -270,8 +282,14 @@ static int parse_stalist_line( const char *line, char *sta, float *lat, float *l
 				continue;
 			}
 			else {
-				if ( sscanf(line, "%s %f %f %f %f %f %f\n", sta, lat, lon, elev, &gain[0], &gain[1], &gain[2]) == 7 )
+				if (
+					sscanf(
+						line, "%s %s %s %f %f %f %s %e %s %e %s %e\n", sta, net, loc, lat, lon, elev,
+						chan[0], &gain[0], chan[1], &gain[1], chan[2], &gain[2]
+					) == 12
+				) {
 					return 0;
+				}
 			}
 		/* */
 			break;

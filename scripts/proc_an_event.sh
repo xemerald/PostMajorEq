@@ -60,3 +60,4 @@ rm -rf ${SAC_DIR}
 rm -f ${EQINFO}
 #
 echo "Event processing complete!!"
+exit

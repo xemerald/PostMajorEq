@@ -42,3 +42,4 @@ do
 done
 #
 echo "All the processing complete!!"
+exit
