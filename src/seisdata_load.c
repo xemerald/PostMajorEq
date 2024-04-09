@@ -2,7 +2,7 @@
  * @file seisdata_load.c
  * @author Benjamin Yang @ National Taiwan University (b98204032@gmail.com)
  * @brief
- * @version 1.0.1
+ * @version 1.0.0
  * @date 2024-04-07
  *
  * @copyright Copyright (c) 2024

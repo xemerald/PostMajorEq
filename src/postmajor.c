@@ -26,7 +26,7 @@
 /* Internal Function Prototypes */
 static int    proc_argv( int, char * [] );
 static void   usage( void );
-static void   init_snl_info( SNL_INFO * );
+static void   init_snl_info_params( SNL_INFO * );
 static int    parse_stalist_line( SNL_INFO *, const char * );
 static int    parse_stalist( SNL_INFO **, const char * );
 static int    parse_eqinfo_file( const char *, float *, float *, float *, double * );
@@ -34,7 +34,7 @@ static int    pick_pwave_arrival( SNL_INFO *, const double );
 static void   proc_acc( SNL_INFO *, const int );
 static void   proc_vel( SNL_INFO *, const int );
 static void   proc_disp( SNL_INFO *, const int );
-static void   proc_leadtime( SNL_INFO *, const int );
+static void   proc_leadtime( SNL_INFO * );
 static float *_integral_waveform( float *, const int, const double );
 static float *highpass_filter( float *, const int, const double, const int );
 static void   integral_waveforms( SNL_INFO * );
@@ -42,11 +42,13 @@ static float  calc_tau_c( const float *, const int, const float, const int );
 static float  calc_peak_value( const float *, const int, const float, const int );
 static double coor2distf( const double, const double, const double, const double );
 /* */
-static _Bool HeaderSwitch     = 1;
-static _Bool CoordinateSwitch = 0;
-static char *EqInfoFile       = NULL;
-static char *StaListFile      = NULL;
-static char *SeisDataFile     = NULL;
+static _Bool HeaderSwitch      = 1;
+static _Bool CoordinateSwitch  = 0;
+static _Bool IgnStaWithoutData = 0;
+static _Bool IgnStaWithoutPick = 0;
+static char *EqInfoFile        = NULL;
+static char *StaListFile       = NULL;
+static char *SeisDataFile      = NULL;
 static int (*LoadSeisdataFunc)( SNL_INFO *, const char * ) = seisdata_load_sac;
 
 /**
@@ -59,7 +61,6 @@ static int (*LoadSeisdataFunc)( SNL_INFO *, const char * ) = seisdata_load_sac;
 int main( int argc, char **argv )
 {
 /* */
-	int    eq_flag = 0;
 	float  elat;
 	float  elon;
 	float  edep;
@@ -67,7 +68,6 @@ int main( int argc, char **argv )
 /* */
 	SNL_INFO *snl_infos    = NULL;
 	int       totalsnl     = 0;
-	int       arrival_flag = 0;
 	int       end_pos      = 0;
 
 /* Check command line arguments */
@@ -77,18 +77,23 @@ int main( int argc, char **argv )
 	}
 
 /* */
-	if ( !parse_eqinfo_file( EqInfoFile, &elat, &elon, &edep, &otime ) ) {
-		eq_flag = 1;
-	}
-/* */
-	if ( (totalsnl = parse_stalist( &snl_infos, StaListFile )) <= 0 ) {
+	if ( parse_eqinfo_file( EqInfoFile, &elat, &elon, &edep, &otime ) < 0 )
 		return -1;
-	}
+/* */
+	if ( (totalsnl = parse_stalist( &snl_infos, StaListFile )) <= 0 )
+		return -1;
 
 /* */
 	for ( int i = 0; i < totalsnl; i++ ) {
-		if ( LoadSeisdataFunc( &snl_infos[i], SeisDataFile ) )
+	/* */
+		snl_infos[i].epic_dist = coor2distf( elon, elat, snl_infos[i].longitude, snl_infos[i].latitude );
+
+	/* */
+		if ( LoadSeisdataFunc( &snl_infos[i], SeisDataFile ) < 0 ) {
+			init_snl_info_params( &snl_infos[i] );
 			continue;
+		}
+
 	/* */
 		fprintf(
 			stderr, "Processing data of %s.%s.%s (start at %lf, npts %d, delta %.2lf)... \n",
@@ -96,7 +101,7 @@ int main( int argc, char **argv )
 		);
 
 	/* Set the time before origin time 1 sec. as the start point for scaning */
-		if ( !(arrival_flag = pick_pwave_arrival( &snl_infos[i], otime )) ) {
+		if ( !( snl_infos[i].pick_flag = pick_pwave_arrival( &snl_infos[i], otime )) ) {
 			fprintf(
 				stderr, "Can't find valid P arrival (Np: %d, SNR: %lf), skip those time related parameters for SNL %s.%s.%s.\n",
 				snl_infos[i].parrival_pos, snl_infos[i].snr, snl_infos[i].sta, snl_infos[i].net, snl_infos[i].loc
@@ -117,9 +122,7 @@ int main( int argc, char **argv )
 	/* */
 		proc_disp( &snl_infos[i], end_pos );
 	/* */
-		proc_leadtime( &snl_infos[i], arrival_flag );
-	/* */
-		snl_infos[i].epic_dist = eq_flag ? coor2distf( elon, elat, snl_infos[i].longitude, snl_infos[i].latitude ) : -1.0;
+		proc_leadtime( &snl_infos[i] );
 
 	/* */
 		fprintf(
@@ -141,6 +144,11 @@ int main( int argc, char **argv )
 		for ( int j = 0; j < NUM_CHANNEL_SNL; j++ )
 			if ( snl_infos[i].seis[j] )
 				free(snl_infos[i].seis[j]);
+
+	/* */
+		if ( (IgnStaWithoutData && snl_infos[i].npts < 0) || (IgnStaWithoutPick && !snl_infos[i].pick_flag) )
+			continue;
+
 	/* */
 		fprintf(
 			stdout, OUTPUT_DATA_FORMAT,
@@ -191,6 +199,12 @@ static int proc_argv( int argc, char *argv[] )
 		}
 		else if ( !strcmp(argv[i], "-n") ) {
 			HeaderSwitch = 0;
+		}
+		else if ( !strcmp(argv[i], "-i") ) {
+			IgnStaWithoutData = 1;
+		}
+		else if ( !strcmp(argv[i], "-ip") ) {
+			IgnStaWithoutPick = 1;
 		}
 		else if ( !strcmp(argv[i], "-f") ) {
 			strncpy(informat, argv[++i], sizeof(informat) - 1);
@@ -258,6 +272,8 @@ static void usage( void )
 		" -h           Show this usage message\n"
 		" -c           Append the station coordinate in output, default is off\n"
 		" -n           Turn off the output header, default is on\n"
+		" -i           Ignore the station without input seismic data, default is on\n"
+		" -ip          Ignore the station without valid picking, default is on\n"
 		" -f format    Specify input format, there are SAC, MSEED|MSEED3 & TANK, default is SAC\n"
 		"\n"
 		"This program will program to read SAC data files and compute\n"
@@ -274,16 +290,16 @@ static void usage( void )
  *
  * @param snl_info
  */
-static void init_snl_info( SNL_INFO *snl_info )
+static void init_snl_info_params( SNL_INFO *snl_info )
 {
-/* */
-	memset(snl_info, 0, sizeof(SNL_INFO));
 /* */
 	snl_info->npts         = -1;
 	snl_info->delta        = -1.0;
 	snl_info->starttime    = -1.0;
+	snl_info->pick_flag    = 0;
 	snl_info->parrival_pos = -1;
 	snl_info->sarrival_pos = -1;
+	snl_info->snr          = 0.0;
 /* Derived from waveform */
 	snl_info->pga = 0.0;
 	snl_info->pgv = 0.0;
@@ -302,7 +318,6 @@ static void init_snl_info( SNL_INFO *snl_info )
 /* */
 	snl_info->pga_leadtime = -1.0;
 	snl_info->pgv_leadtime = -1.0;
-	snl_info->epic_dist    = -1.0;
 
 	return;
 }
@@ -386,7 +401,8 @@ static int parse_stalist( SNL_INFO **snl_info, const char *path )
 /* */
 	totalline = 0;
 	while ( fgets(line, sizeof(line) - 1, fd) != NULL ) {
-		init_snl_info( *snl_info + totalline );
+		memset(*snl_info + totalline, 0 , sizeof(SNL_INFO));
+		init_snl_info_params( *snl_info + totalline );
 		if ( parse_stalist_line( *snl_info + totalline, line ) )
 			totalline++;
 	}
@@ -587,15 +603,14 @@ static void proc_disp( SNL_INFO *snl_info, const int end_pos )
  * @brief
  *
  * @param snl_info
- * @param arrival_flag
  */
-static void proc_leadtime( SNL_INFO *snl_info, const int arrival_flag )
+static void proc_leadtime( SNL_INFO *snl_info )
 {
 /* */
-	if ( !arrival_flag || (snl_info->pd35_pos <= 0 && snl_info->pga80_pos <= 0) ) {
+	if ( !snl_info->pick_flag || (snl_info->pd35_pos <= 0 && snl_info->pga80_pos <= 0) ) {
 		snl_info->pga_leadtime = snl_info->pgv_leadtime = -1.0;
 	/* Reset the P-wave peak value 'cause there is not valid arrival time */
-		if ( !arrival_flag )
+		if ( !snl_info->pick_flag )
 			snl_info->pa3 = snl_info->pv3 = snl_info->pd3 = snl_info->tc = -1.0;
 	}
 	else {

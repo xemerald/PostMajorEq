@@ -51,11 +51,12 @@ typedef struct {
 	float longitude;
 	float elevation;
 /* */
-	float *seis[3];       /* input trace buffer */
 	int    npts;
 	float  delta;
+	float *seis[3];       /* input trace buffer */
 	double starttime;
 /* Derived from waveform */
+	int    pick_flag;
 	int    parrival_pos;
 	int    sarrival_pos;
 	double snr;
