@@ -1,4 +1,11 @@
-/*
+/**
+ * @file picker_wu.h
+ * @author Benjamin Yang @ National Taiwan University (b98204032@gmail.com)
+ * @brief
+ * @version 1.0.1
+ * @date 2024-04-05
+ *
+ * @copyright Copyright (c) 2019-now
  *
  */
 #pragma once

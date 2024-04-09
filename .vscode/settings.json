@@ -1,9 +1,7 @@
 {
 	"files.associations": {
-		"array": "c",
-		"string_view": "c",
-		"initializer_list": "c",
-		"utility": "c"
-	},
-	"C_Cpp.errorSquiggles": "disabled"
+		"functional": "c",
+		"sac.h": "c",
+		"postmajor.h": "c"
+	}
 }

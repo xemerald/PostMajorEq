@@ -2,30 +2,27 @@
 #
 #
 CFLAG = /usr/bin/gcc -Wall -O3 -flto -g -I./include
-BIN_NAME = postmajor chan_mod
+BIN_NAME = postmajor
 SRC = ./src
-UTILITY = $(SRC)/iirfilter.o $(SRC)/picker_wu.o $(SRC)/sac_proc.o
+INSTALL_DIR = /usr/local/bin
+UTILITY = $(SRC)/iirfilter.o $(SRC)/picker_wu.o $(SRC)/sac.o $(SRC)/seisdata_load.o
 
-all: postmajor chan_mod
-
-postmajor: $(SRC)/postmajor_sac.o $(UTILITY)
-	$(CFLAG) -o $@ $(SRC)/postmajor_sac.o $(UTILITY) -lm
-
-chan_mod: $(SRC)/chan_mod.o $(SRC)/sac_proc.o
-	$(CFLAG) -o $@ $(SRC)/chan_mod.o $(SRC)/sac_proc.o
-
-concat_sac: $(SRC)/concat_sac.o $(SRC)/sac_proc.o
-	$(CFLAG) -o $@ $(SRC)/concat_sac.o $(SRC)/sac_proc.o
-
-preproc_sac: $(SRC)/preproc_sac.o $(SRC)/sac_proc.o
-	$(CFLAG) -o $@ $(SRC)/preproc_sac.o $(SRC)/sac_proc.o
-
-integral_sac: $(SRC)/integral_sac.o $(SRC)/sac_proc.o
-	$(CFLAG) -o $@ $(SRC)/integral_sac.o $(SRC)/sac_proc.o
+#
+all: postmajor
+#
+postmajor: $(SRC)/postmajor.o $(UTILITY)
+	$(CFLAG) -o $@ $(SRC)/postmajor.o $(UTILITY) -lm
 
 # Compile rule for Object
 %.o:%.c
 	$(CFLAG) -c $< -o $@
+
+#
+#
+install:
+	@echo Installing $(BIN_NAME) to $(INSTALL_DIR)...
+	@cp ./$(BIN_NAME) $(INSTALL_DIR)
+	@echo Finish installing of $(BIN_NAME).
 
 # Clean-up rules
 clean:

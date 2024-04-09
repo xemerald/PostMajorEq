@@ -54,7 +54,7 @@ rm -f ${TMP_DIR}/${FILENAME}
 
 #
 echo "$1 $2 $3 $4 $5 $6 $7 $8 $9" > ${EQINFO}
-postmajor ${EQINFO} ${STALIST} ${SAC_DIR} > ${RESULT}
+postmajor -f SAC -n -c ${EQINFO} ${STALIST} ${SAC_DIR} > ${RESULT}
 #
 rm -rf ${SAC_DIR}
 rm -f ${EQINFO}

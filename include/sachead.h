@@ -48,8 +48,7 @@
  *
  */
 
-#ifndef SACHEAD_H
-#define SACHEAD_H
+#pragma once
 
 /*
  *      SAC Header Include File
@@ -234,5 +233,3 @@ struct SAChead2 {
 };
 
 /* eof sachead.h */
-
-#endif
