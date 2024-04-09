@@ -43,7 +43,7 @@ static float  calc_peak_value( const float *, const int, const float, const int 
 static double coor2distf( const double, const double, const double, const double );
 /* */
 static _Bool HeaderSwitch     = 1;
-static _Bool HeaderCoorSwitch = 0;
+static _Bool CoordinateSwitch = 0;
 static char *EqInfoFile       = NULL;
 static char *StaListFile      = NULL;
 static char *SeisDataFile     = NULL;
@@ -129,12 +129,12 @@ int main( int argc, char **argv )
 	}
 
 /* Output the result to the standard output */
-	if ( HeaderSwitch )
+	if ( HeaderSwitch ) {
 		fprintf(stdout, OUTPUT_FILE_HEADER);
-	if ( HeaderCoorSwitch )
-		fprintf(stdout, OUTPUT_FILE_COOR_HEADER);
-	if ( HeaderSwitch )
+		if ( CoordinateSwitch )
+			fprintf(stdout, OUTPUT_FILE_COOR_HEADER);
 		fprintf(stdout, "\n");
+	}
 /* */
 	for ( int i = 0; i < totalsnl; i++ ) {
 	/* */
@@ -149,7 +149,7 @@ int main( int argc, char **argv )
 			snl_infos[i].pa3, snl_infos[i].pv3, snl_infos[i].pd3, snl_infos[i].tc,
 			snl_infos[i].pga_leadtime, snl_infos[i].pgv_leadtime, snl_infos[i].epic_dist, snl_infos[i].snr
 		);
-		if ( HeaderCoorSwitch )
+		if ( CoordinateSwitch )
 			fprintf(
 				stdout, OUTPUT_DATA_COOR_FORMAT,
 				snl_infos[i].latitude, snl_infos[i].longitude, snl_infos[i].elevation
@@ -187,7 +187,7 @@ static int proc_argv( int argc, char *argv[] )
 			exit(0);
 		}
 		else if ( !strcmp(argv[i], "-c") ) {
-			HeaderCoorSwitch = 1;
+			CoordinateSwitch = 1;
 		}
 		else if ( !strcmp(argv[i], "-n") ) {
 			HeaderSwitch = 0;
