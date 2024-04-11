@@ -55,14 +55,13 @@ double iirfilter_apply( const double sample, const IIR_FILTER *filter, IIR_STAGE
 
 	for ( int i = 0; i < filter->nsects; i++ ) {
 	/* */
-		b0 = filter->sections[i].numerator[0];
-		b1 = filter->sections[i].numerator[1];
-		b2 = filter->sections[i].numerator[2];
-		a1 = filter->sections[i].denominator[1];
-		a2 = filter->sections[i].denominator[2];
+		b0 = filter->sections[i].numerator[0] * sample;
+		b1 = filter->sections[i].numerator[1] * stage[i].x1;
+		b2 = filter->sections[i].numerator[2] * stage[i].x2;
+		a1 = filter->sections[i].denominator[1] * stage[i].y1;
+		a2 = filter->sections[i].denominator[2] * stage[i].y2;
 	/* */
-		output  = b0*sample + b1*stage[i].x1 + b2*stage[i].x2;
-		output -= a1*stage[i].y1 + a2*stage[i].y2;
+		output = (b0 + b1 + b2) - (a1 + a2);
 	/* */
 		stage[i].y2 = stage[i].y1;
 		stage[i].y1 = output;
@@ -98,7 +97,9 @@ IIR_FILTER iirfilter_design( const int order, const int filtertype, const int an
 
 /* */
 	memset(&result, 0, sizeof(IIR_FILTER));
-
+/* Initialize the zeros complex array, it might be the most compatible way... */
+	for ( int i = 0; i < MAX_NUM_SECTIONS; i++ )
+		zeros[i] = 0.0 + 0.0 * _Complex_I;
 /* */
 	switch ( anproto ) {
 	case IIR_BUTTERWORTH:
@@ -542,7 +543,7 @@ static int bilinear2( IIR_FILTER *filter )
 		a1 = filter->sections[i].numerator[1];
 		a2 = filter->sections[i].numerator[2];
 
-		filter->sections[i].numerator[0] = (a2 + a1 + a0)/ scale;
+		filter->sections[i].numerator[0] = (a2 + a1 + a0) / scale;
 		filter->sections[i].numerator[1] = (2.0 * (a0 - a2)) / scale;
 		filter->sections[i].numerator[2] = (a2 - a1 + a0) / scale;
 	}

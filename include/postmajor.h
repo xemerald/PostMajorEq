@@ -52,6 +52,7 @@ typedef struct {
 	float elevation;
 /* */
 	int    npts;
+	int    gaps;
 	float  delta;
 	float *seis[3];       /* input trace buffer */
 	double starttime;

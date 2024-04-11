@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <time.h>
 #include <math.h>
@@ -35,17 +36,20 @@ static void   proc_acc( SNL_INFO *, const int );
 static void   proc_vel( SNL_INFO *, const int );
 static void   proc_disp( SNL_INFO *, const int );
 static void   proc_leadtime( SNL_INFO * );
-static float *_integral_waveform( float *, const int, const double );
-static float *highpass_filter( float *, const int, const double, const int );
-static void   integral_waveforms( SNL_INFO * );
+static float *_integral_waveform( float *, const int, const double, const _Bool );
+static float *highpass_filter( float *, const int, const double, const _Bool );
+static void   integral_waveforms( SNL_INFO *, const _Bool );
+static float *_differential_waveform( float *, const int, const double );
+static void   differential_waveform( SNL_INFO * );
 static float  calc_tau_c( const float *, const int, const float, const int );
 static float  calc_peak_value( const float *, const int, const float, const int );
 static double coor2distf( const double, const double, const double, const double );
 /* */
-static _Bool HeaderSwitch      = 1;
-static _Bool CoordinateSwitch  = 0;
-static _Bool IgnStaWithoutData = 0;
-static _Bool IgnStaWithoutPick = 0;
+static _Bool HeaderSwitch      = true;
+static _Bool CoordinateSwitch  = false;
+static _Bool IgnStaWithoutData = false;
+static _Bool IgnStaWithoutPick = false;
+static _Bool TwoStageIntegral  = false;
 static char *EqInfoFile        = NULL;
 static char *StaListFile       = NULL;
 static char *SeisDataFile      = NULL;
@@ -111,44 +115,60 @@ int main( int argc, char **argv )
 		if ( (end_pos = snl_infos[i].parrival_pos + (int)(EV_DURATION / snl_infos[i].delta) + 1) > snl_infos[i].npts )
 			end_pos = snl_infos[i].npts;
 
-	/* */
+	/* First of all, process the raw acceleration sample */
 		proc_acc( &snl_infos[i], end_pos );
-	/* Transform the acceleration sample to velocity sample */
-		integral_waveforms( &snl_infos[i] );
-	/* */
-		proc_vel( &snl_infos[i], end_pos );
-	/* Transform the velocity sample to displacement sample */
-		integral_waveforms( &snl_infos[i] );
-	/* */
-		proc_disp( &snl_infos[i], end_pos );
-	/* */
+	/* Fork the process depends on the two stage integral switch */
+		if ( TwoStageIntegral ) {
+		/* Transform the acceleration sample to velocity sample */
+			integral_waveforms( &snl_infos[i], true );
+		/* */
+			proc_vel( &snl_infos[i], end_pos );
+		/* Transform the velocity sample to displacement sample */
+			integral_waveforms( &snl_infos[i], true );
+		/* */
+			proc_disp( &snl_infos[i], end_pos );
+		}
+		else {
+		/* Transform the acceleration sample directly to displacement sample */
+			integral_waveforms( &snl_infos[i], false );
+			integral_waveforms( &snl_infos[i], true );
+		/* */
+			proc_disp( &snl_infos[i], end_pos );
+		/* Then transform the displacement sample back to velocity sample */
+			differential_waveform( &snl_infos[i] );
+		/* */
+			proc_vel( &snl_infos[i], end_pos );
+		}
+	/* Finally, derive the lead time information */
 		proc_leadtime( &snl_infos[i] );
 
-	/* */
+	/* End of seismic data processing */
 		fprintf(
 			stderr, "Finished the processing data of %s.%s.%s (start at %lf, npts %d, delta %.2lf)!\n",
 			snl_infos[i].sta, snl_infos[i].net, snl_infos[i].loc, snl_infos[i].starttime, snl_infos[i].npts, snl_infos[i].delta
 		);
+	
+	/* After the processing, free the seismic data memory space */
+		for ( int j = 0; j < NUM_CHANNEL_SNL; j++ ) {
+			if ( snl_infos[i].seis[j] ) {
+				free(snl_infos[i].seis[j]);
+				snl_infos[i].seis[j] = NULL;
+			}
+		}
 	}
 
-/* Output the result to the standard output */
+/* Output the result, first the header... */
 	if ( HeaderSwitch ) {
 		fprintf(stdout, OUTPUT_FILE_HEADER);
 		if ( CoordinateSwitch )
 			fprintf(stdout, OUTPUT_FILE_COOR_HEADER);
 		fprintf(stdout, "\n");
 	}
-/* */
+/* Then, all the stations' result */
 	for ( int i = 0; i < totalsnl; i++ ) {
-	/* */
-		for ( int j = 0; j < NUM_CHANNEL_SNL; j++ )
-			if ( snl_infos[i].seis[j] )
-				free(snl_infos[i].seis[j]);
-
 	/* */
 		if ( (IgnStaWithoutData && snl_infos[i].npts < 0) || (IgnStaWithoutPick && !snl_infos[i].pick_flag) )
 			continue;
-
 	/* */
 		fprintf(
 			stdout, OUTPUT_DATA_FORMAT,
@@ -195,16 +215,19 @@ static int proc_argv( int argc, char *argv[] )
 			exit(0);
 		}
 		else if ( !strcmp(argv[i], "-c") ) {
-			CoordinateSwitch = 1;
+			CoordinateSwitch = true;
 		}
 		else if ( !strcmp(argv[i], "-n") ) {
-			HeaderSwitch = 0;
+			HeaderSwitch = false;
+		}
+		else if ( !strcmp(argv[i], "-t") ) {
+			TwoStageIntegral = true;
 		}
 		else if ( !strcmp(argv[i], "-i") ) {
-			IgnStaWithoutData = 1;
+			IgnStaWithoutData = true;
 		}
 		else if ( !strcmp(argv[i], "-ip") ) {
-			IgnStaWithoutPick = 1;
+			IgnStaWithoutPick = true;
 		}
 		else if ( !strcmp(argv[i], "-f") ) {
 			strncpy(informat, argv[++i], sizeof(informat) - 1);
@@ -268,13 +291,15 @@ static void usage( void )
 	fprintf(stdout, "       or %s [options] <input eq. info> <input station list> <input seismic data> > <output path>\n\n", PROG_NAME);
 	fprintf(stdout,
 		"*** Options ***\n"
-		" -v           Report program version\n"
-		" -h           Show this usage message\n"
-		" -c           Append the station coordinate in output, default is off\n"
-		" -n           Turn off the output header, default is on\n"
-		" -i           Ignore the station without input seismic data, default is on\n"
-		" -ip          Ignore the station without valid picking, default is on\n"
-		" -f format    Specify input format, there are SAC, MSEED|MSEED3 & TANK, default is SAC\n"
+		" -v              Report program version\n"
+		" -h              Show this usage message\n"
+		" -c              Append the station coordinate in output, default is off\n"
+		" -n              Turn off the output header, default is on\n"
+		" -t              Turn on the two stage integral process, default is only one stage\n"
+		" -i              Ignore the station without input seismic data, default is on\n"
+		" -ip             Ignore the station without valid picking, default is on\n"
+		" -f format       Specify input format, there are SAC, MSEED|MSEED3 & TANK, default is SAC\n"
+		//" -o output_file  Specify output file name, it will turn off the standard output & create a new output file\n"
 		"\n"
 		"This program will program to read SAC data files and compute\n"
 		"the peak values include acceleration, velocity & displacement.\n"
@@ -640,9 +665,10 @@ static void proc_leadtime( SNL_INFO *snl_info )
  * @param input
  * @param npts
  * @param delta
+ * @param filter_sw
  * @return float*
  */
-static float *_integral_waveform( float *input, const int npts, const double delta )
+static float *_integral_waveform( float *input, const int npts, const double delta, const _Bool filter_sw )
 {
 	const float half_delta = delta * 0.5;
 
@@ -657,7 +683,8 @@ static float *_integral_waveform( float *input, const int npts, const double del
 		input[i]   = this_pseis;
 	}
 /* */
-	highpass_filter( input, npts, delta, 0 );
+	if ( filter_sw )
+		highpass_filter( input, npts, delta, false );
 
 	return input;
 }
@@ -671,7 +698,7 @@ static float *_integral_waveform( float *input, const int npts, const double del
  * @param zero_phase
  * @return float*
  */
-static float *highpass_filter( float *input, const int npts, const double delta, const int zero_phase )
+static float *highpass_filter( float *input, const int npts, const double delta, const _Bool zero_phase )
 {
 	IIR_FILTER filter;
 	IIR_STAGE *stage;
@@ -699,11 +726,48 @@ static float *highpass_filter( float *input, const int npts, const double delta,
  * @brief
  *
  * @param snl_info
+ * @param filter_sw
  */
-static void integral_waveforms( SNL_INFO *snl_info )
+static void integral_waveforms( SNL_INFO *snl_info, const _Bool filter_sw )
 {
 	for ( int i = 0; i < NUM_CHANNEL_SNL; i++ )
-		_integral_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta );
+		_integral_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta, filter_sw );
+
+	return;
+}
+
+/**
+ * @brief 
+ * 
+ * @param input 
+ * @param npts 
+ * @param delta 
+ * @return float* 
+ */
+static float *_differential_waveform( float *input, const int npts, const double delta )
+{
+	float last_seis  = 0.0;
+	float this_pseis = 0.0;
+
+/* */
+	for ( int i = 0; i < npts; i++ ) {
+		this_pseis = (input[i] - last_seis) / delta;
+		last_seis  = input[i];
+		input[i]   = this_pseis;
+	}
+
+	return input;
+}
+
+/**
+ * @brief
+ *
+ * @param snl_info
+ */
+static void differential_waveform( SNL_INFO *snl_info )
+{
+	for ( int i = 0; i < NUM_CHANNEL_SNL; i++ )
+		_differential_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta );
 
 	return;
 }
