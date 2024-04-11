@@ -17,7 +17,7 @@ Nothing special, it can be compiled under only standard C library.
 - `postmajor -h` show some helping tips.
 - `postmajor -v` show version information.
 - `postmajor -f SAC <input eq. info> <input station list> <input seismic data>` or `postmajor <input eq. info> <input station list> <input seismic data>` process the input **SAC** format file(s) & output the result to the standard output.
-- `postmajor -f MSEED <input eq. info> <input station list> <input seismic data>` process the input **miniSEED** format file(s).
+- `postmajor -f MSEED <input eq. info> <input station list> <input seismic data>` process the input **miniSEED** format file & output the result to the standard output.
 - `postmajor <input eq. info> <input station list> <input seismic data> > <output path>` process the input **SAC** format file(s) & redirect the result to the output path.
 - `postmajor -c <input eq. info> <input station list> <input seismic data>` process the input **SAC** format file(s) & append the station coordinate to the result.
 
