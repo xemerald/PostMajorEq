@@ -147,7 +147,7 @@ int main( int argc, char **argv )
 			stderr, "Finished the processing data of %s.%s.%s (start at %lf, npts %d, delta %.2lf)!\n",
 			snl_infos[i].sta, snl_infos[i].net, snl_infos[i].loc, snl_infos[i].starttime, snl_infos[i].npts, snl_infos[i].delta
 		);
-	
+
 	/* After the processing, free the seismic data memory space */
 		for ( int j = 0; j < NUM_CHANNEL_SNL; j++ ) {
 			if ( snl_infos[i].seis[j] ) {
@@ -676,9 +676,8 @@ static float *_integral_waveform( float *input, const int npts, const double del
 	float this_pseis = 0.0;
 
 /* */
-	input[0] = 0.0;
-	for ( int i = 1; i < npts; i++ ) {
-		this_pseis = (input[i] + last_seis) * half_delta + input[i - 1];
+	for ( int i = 0; i < npts; i++ ) {
+		this_pseis = (input[i] + last_seis) * half_delta + this_pseis;
 		last_seis  = input[i];
 		input[i]   = this_pseis;
 	}
@@ -737,12 +736,12 @@ static void integral_waveforms( SNL_INFO *snl_info, const _Bool filter_sw )
 }
 
 /**
- * @brief 
- * 
- * @param input 
- * @param npts 
- * @param delta 
- * @return float* 
+ * @brief
+ *
+ * @param input
+ * @param npts
+ * @param delta
+ * @return float*
  */
 static float *_differential_waveform( float *input, const int npts, const double delta )
 {
