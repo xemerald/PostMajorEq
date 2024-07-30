@@ -181,11 +181,11 @@ int pickwu_s_arrival_pick(
 	/*  */
 		switch ( cf_flag ) {
 		case 2: default:
-			sum += characteristic_func_2( input_n[i], input_n[i-1] );
+			sum = characteristic_func_2( input_n[i], input_n[i-1] );
 			sum += characteristic_func_2( input_e[i], input_e[i-1] );
 			break;
 		case 1:
-			sum += characteristic_func_1( input_n[i] );
+			sum = characteristic_func_1( input_n[i] );
 			sum += characteristic_func_1( input_e[i] );
 			break;
 		}
