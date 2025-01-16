@@ -36,12 +36,12 @@ static void   proc_acc( SNL_INFO *, const int );
 static void   proc_vel( SNL_INFO *, const int );
 static void   proc_disp( SNL_INFO *, const int );
 static void   proc_leadtime( SNL_INFO * );
-static float *_integral_waveform( float *, const int, const double, const _Bool );
-static float *highpass_filter( float *, const int, const double, const _Bool );
 static void   integral_waveforms( SNL_INFO *, const _Bool );
-static float *_differential_waveform( float *, const int, const double );
 static void   differential_waveform( SNL_INFO * );
-static float  calc_tau_c( const float *, const int, const float, const int );
+static float *_integral_waveform( float *, const int, const double, const _Bool );
+static float *_differential_waveform( float *, const int, const double );
+static float *highpass_filter( float *, const int, const double, const _Bool );
+static float  calc_tau_c( const float *, const float *, const int, const float, const int );
 static float  calc_peak_value( const float *, const int, const float, const int );
 static double coor2distf( const double, const double, const double, const double );
 /* */
@@ -50,6 +50,7 @@ static _Bool CoordinateSwitch  = false;
 static _Bool IgnStaWithoutData = false;
 static _Bool IgnStaWithoutPick = false;
 static _Bool TwoStageIntegral  = false;
+static _Bool VecSumSwitch      = false;
 static char *EqInfoFile        = NULL;
 static char *StaListFile       = NULL;
 static char *SeisDataFile      = NULL;
@@ -114,7 +115,9 @@ int main( int argc, char **argv )
 	/* */
 		if ( (end_pos = snl_infos[i].parrival_pos + (int)(EV_DURATION / snl_infos[i].delta) + 1) > snl_infos[i].npts )
 			end_pos = snl_infos[i].npts;
-
+	/* */
+		snl_infos[i].sum_vel = calloc(snl_infos[i].npts, sizeof(float));
+		snl_infos[i].sum_dis = calloc(snl_infos[i].npts, sizeof(float));
 	/* First of all, process the raw acceleration sample */
 		proc_acc( &snl_infos[i], end_pos );
 	/* Fork the process depends on the two stage integral switch */
@@ -139,6 +142,12 @@ int main( int argc, char **argv )
 		/* */
 			proc_vel( &snl_infos[i], end_pos );
 		}
+	/* Computation of Tau-c at 3 seconds */
+		snl_infos[i].tc = calc_tau_c(
+			&snl_infos[i].sum_dis[snl_infos[i].parrival_pos],
+			&snl_infos[i].sum_vel[snl_infos[i].parrival_pos],
+			end_pos, snl_infos[i].delta, 3
+		);
 	/* Finally, derive the lead time information */
 		proc_leadtime( &snl_infos[i] );
 
@@ -155,6 +164,11 @@ int main( int argc, char **argv )
 				snl_infos[i].seis[j] = NULL;
 			}
 		}
+	/* */
+		if ( snl_infos[i].sum_vel )
+			free(snl_infos[i].sum_vel);
+		if ( snl_infos[i].sum_dis )
+			free(snl_infos[i].sum_dis);
 	}
 
 /* Output the result, first the header... */
@@ -222,6 +236,9 @@ static int proc_argv( int argc, char *argv[] )
 		}
 		else if ( !strcmp(argv[i], "-t") ) {
 			TwoStageIntegral = true;
+		}
+		else if ( !strcmp(argv[i], "-s") ) {
+			VecSumSwitch = true;
 		}
 		else if ( !strcmp(argv[i], "-i") ) {
 			IgnStaWithoutData = true;
@@ -296,6 +313,7 @@ static void usage( void )
 		" -c              Append the station coordinate in output, default is off\n"
 		" -n              Turn off the output header, default is on\n"
 		" -t              Turn on the two stage integral process, default is only one stage\n"
+		" -s              Turn on the vector summation process, default is off\n"
 		" -i              Ignore the station without input seismic data, default is on\n"
 		" -ip             Ignore the station without valid picking, default is on\n"
 		" -f format       Specify input format, there are SAC, MSEED|MSEED3 & TANK, default is SAC\n"
@@ -333,6 +351,9 @@ static void init_snl_info_params( SNL_INFO *snl_info )
 	snl_info->pv3 = 0.0;
 	snl_info->pd3 = 0.0;
 	snl_info->tc  = 0.0;
+/* */
+	snl_info->sum_vel = NULL;
+	snl_info->sum_dis = NULL;
 /* */
 	snl_info->pga_pos   = -1;
 	snl_info->pgv_pos   = -1;
@@ -539,31 +560,63 @@ static int pick_pwave_arrival( SNL_INFO *snl_info, const double origin_time )
  */
 static void proc_acc( SNL_INFO *snl_info, const int end_pos )
 {
+	float vec_sum[snl_info->npts];
+
 /* */
 	snl_info->pga80_pos = snl_info->pga4_pos = end_pos;
 /* */
-	for ( int i = 0; i < 3; i++ ) {
+	if ( VecSumSwitch ) {
 		for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+			vec_sum[j] =
+				snl_info->seis[0][j] * snl_info->seis[0][j] +
+				snl_info->seis[1][j] * snl_info->seis[1][j] +
+				snl_info->seis[2][j] * snl_info->seis[2][j];
+			vec_sum[j] = sqrtf(vec_sum[j]);
 		/* */
-			if ( fabs(snl_info->seis[i][j]) > 4.0 ) {
+			if ( vec_sum[j] > 4.0 ) {
 			/* */
 				if ( j < snl_info->pga4_pos )
 					snl_info->pga4_pos = j;
 			/* */
-				if ( fabs(snl_info->seis[i][j]) > 80.0 ) {
+				if ( vec_sum[j] > 80.0 ) {
 					if ( j < snl_info->pga80_pos )
 						snl_info->pga80_pos = j;
 				}
 			}
 		/* */
-			if ( fabs(snl_info->seis[i][j]) > snl_info->pga ) {
-				snl_info->pga     = fabs(snl_info->seis[i][j]);
+			if ( vec_sum[j] > snl_info->pga ) {
+				snl_info->pga     = vec_sum[j];
 				snl_info->pga_pos = j;
 			}
 		}
+	/* */
+		snl_info->pa3 = calc_peak_value( &vec_sum[snl_info->parrival_pos], end_pos, snl_info->delta, 3 );
 	}
-/* */
-	snl_info->pa3 = calc_peak_value( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
+	else {
+		for ( int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
+			for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+			/* */
+				if ( fabs(snl_info->seis[i][j]) > 4.0 ) {
+				/* */
+					if ( j < snl_info->pga4_pos )
+						snl_info->pga4_pos = j;
+				/* */
+					if ( fabs(snl_info->seis[i][j]) > 80.0 ) {
+						if ( j < snl_info->pga80_pos )
+							snl_info->pga80_pos = j;
+					}
+				}
+			/* */
+				if ( fabs(snl_info->seis[i][j]) > snl_info->pga ) {
+					snl_info->pga     = fabs(snl_info->seis[i][j]);
+					snl_info->pga_pos = j;
+				}
+			}
+		}
+	/* */
+		snl_info->pa3 = calc_peak_value( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
+	}
+
 
 	return;
 }
@@ -576,18 +629,44 @@ static void proc_acc( SNL_INFO *snl_info, const int end_pos )
  */
 static void proc_vel( SNL_INFO *snl_info, const int end_pos )
 {
+	float vec_sum[snl_info->npts];
+
 /* */
-	for ( int i = 0; i < 3; i++ ) {
+	if ( VecSumSwitch ) {
 		for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+			vec_sum[j] =
+				snl_info->seis[0][j] * snl_info->seis[0][j] +
+				snl_info->seis[1][j] * snl_info->seis[1][j] +
+				snl_info->seis[2][j] * snl_info->seis[2][j];
 		/* */
-			if ( fabs(snl_info->seis[i][j]) > snl_info->pgv ) {
-				snl_info->pgv     = fabs(snl_info->seis[i][j]);
+			snl_info->sum_vel[j] = vec_sum[j] + snl_info->sum_vel[j > 0 ? j - 1 : 0];
+		/* */
+			vec_sum[j] = sqrtf(vec_sum[j]);
+		/* */
+			if ( vec_sum[j] > snl_info->pgv ) {
+				snl_info->pgv     = vec_sum[j];
 				snl_info->pgv_pos = j;
 			}
 		}
+	/* */
+		snl_info->pv3 = calc_peak_value( &vec_sum[snl_info->parrival_pos], end_pos, snl_info->delta, 3 );
 	}
-/* */
-	snl_info->pv3 = calc_peak_value( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
+	else {
+		for ( int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
+			for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+			/* */
+				if ( fabs(snl_info->seis[i][j]) > snl_info->pgv ) {
+					snl_info->pgv     = fabs(snl_info->seis[i][j]);
+					snl_info->pgv_pos = j;
+				}
+			}
+		}
+	/* */
+		for ( int i = snl_info->parrival_pos; i < end_pos; i++ )
+			snl_info->sum_vel[i] = snl_info->seis[0][i] * snl_info->seis[0][i] + snl_info->sum_vel[i > 0 ? i - 1 : 0];
+	/* */
+		snl_info->pv3 = calc_peak_value( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
+	}
 
 	return;
 }
@@ -600,26 +679,57 @@ static void proc_vel( SNL_INFO *snl_info, const int end_pos )
  */
 static void proc_disp( SNL_INFO *snl_info, const int end_pos )
 {
+	float vec_sum[snl_info->npts];
+
 /* */
 	snl_info->pd35_pos = end_pos;
 /* */
-	for ( int i = 0; i < 3; i++ ) {
+	if ( VecSumSwitch ) {
 		for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+			vec_sum[j] =
+				snl_info->seis[0][j] * snl_info->seis[0][j] +
+				snl_info->seis[1][j] * snl_info->seis[1][j] +
+				snl_info->seis[2][j] * snl_info->seis[2][j];
 		/* */
-			if ( fabs(snl_info->seis[i][j]) > 0.35 ) {
+			snl_info->sum_dis[j] = vec_sum[j] + snl_info->sum_dis[j > 0 ? j - 1 : 0];
+		/* */
+			vec_sum[j] = sqrtf(vec_sum[j]);
+		/* */
+			if ( vec_sum[j] > 0.35 ) {
 				if ( j < snl_info->pd35_pos )
 					snl_info->pd35_pos = j;
 			}
 		/* */
-			if ( fabs(snl_info->seis[i][j]) > snl_info->pgd ) {
-				snl_info->pgd     = fabs(snl_info->seis[i][j]);
+			if ( vec_sum[j] > snl_info->pgd ) {
+				snl_info->pgd     = vec_sum[j];
 				snl_info->pgd_pos = j;
 			}
 		}
+	/* Computation of Pd at 3 seconds */
+		snl_info->pd3 = calc_peak_value( &vec_sum[snl_info->parrival_pos], end_pos, snl_info->delta, 3 );
 	}
-/* Computation of Pd & Tau-c at 3 seconds */
-	snl_info->pd3 = calc_peak_value( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
-	snl_info->tc  = calc_tau_c( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
+	else {
+	/* */
+		for ( int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
+			for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+			/* */
+				if ( fabs(snl_info->seis[i][j]) > 0.35 ) {
+					if ( j < snl_info->pd35_pos )
+						snl_info->pd35_pos = j;
+				}
+			/* */
+				if ( fabs(snl_info->seis[i][j]) > snl_info->pgd ) {
+					snl_info->pgd     = fabs(snl_info->seis[i][j]);
+					snl_info->pgd_pos = j;
+				}
+			}
+		}
+	/* */
+		for ( int i = snl_info->parrival_pos; i < end_pos; i++ )
+			snl_info->sum_dis[i] = snl_info->seis[0][i] * snl_info->seis[0][i] + snl_info->sum_dis[i > 0 ? i - 1 : 0];
+	/* Computation of Pd at 3 seconds */
+		snl_info->pd3 = calc_peak_value( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
+	}
 
 	return;
 }
@@ -662,6 +772,33 @@ static void proc_leadtime( SNL_INFO *snl_info )
 /**
  * @brief
  *
+ * @param snl_info
+ * @param filter_sw
+ */
+static void integral_waveforms( SNL_INFO *snl_info, const _Bool filter_sw )
+{
+	for ( int i = 0; i < NUM_CHANNEL_SNL; i++ )
+		_integral_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta, filter_sw );
+
+	return;
+}
+
+/**
+ * @brief
+ *
+ * @param snl_info
+ */
+static void differential_waveform( SNL_INFO *snl_info )
+{
+	for ( int i = 0; i < NUM_CHANNEL_SNL; i++ )
+		_differential_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta );
+
+	return;
+}
+
+/**
+ * @brief
+ *
  * @param input
  * @param npts
  * @param delta
@@ -684,6 +821,29 @@ static float *_integral_waveform( float *input, const int npts, const double del
 /* */
 	if ( filter_sw )
 		highpass_filter( input, npts, delta, false );
+
+	return input;
+}
+
+/**
+ * @brief
+ *
+ * @param input
+ * @param npts
+ * @param delta
+ * @return float*
+ */
+static float *_differential_waveform( float *input, const int npts, const double delta )
+{
+	float last_seis  = 0.0;
+	float this_pseis = 0.0;
+
+/* */
+	for ( int i = 0; i < npts; i++ ) {
+		this_pseis = (input[i] - last_seis) / delta;
+		last_seis  = input[i];
+		input[i]   = this_pseis;
+	}
 
 	return input;
 }
@@ -724,81 +884,23 @@ static float *highpass_filter( float *input, const int npts, const double delta,
 /**
  * @brief
  *
- * @param snl_info
- * @param filter_sw
- */
-static void integral_waveforms( SNL_INFO *snl_info, const _Bool filter_sw )
-{
-	for ( int i = 0; i < NUM_CHANNEL_SNL; i++ )
-		_integral_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta, filter_sw );
-
-	return;
-}
-
-/**
- * @brief
- *
- * @param input
- * @param npts
- * @param delta
- * @return float*
- */
-static float *_differential_waveform( float *input, const int npts, const double delta )
-{
-	float last_seis  = 0.0;
-	float this_pseis = 0.0;
-
-/* */
-	for ( int i = 0; i < npts; i++ ) {
-		this_pseis = (input[i] - last_seis) / delta;
-		last_seis  = input[i];
-		input[i]   = this_pseis;
-	}
-
-	return input;
-}
-
-/**
- * @brief
- *
- * @param snl_info
- */
-static void differential_waveform( SNL_INFO *snl_info )
-{
-	for ( int i = 0; i < NUM_CHANNEL_SNL; i++ )
-		_differential_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta );
-
-	return;
-}
-
-/**
- * @brief
- *
- * @param input
+ * @param sum_dis
+ * @param sum_vel
  * @param npts
  * @param delta
  * @param sec
  * @return float
  */
-static float calc_tau_c( const float *input, const int npts, const float delta, const int sec )
+static float calc_tau_c( const float *sum_dis, const float *sum_vel, const int npts, const float delta, const int sec )
 {
 	const int i_end = (int)(sec / delta);
 
-	float result  = 0.0;
-	float sum_dis = 0.0;
-	float sum_vel = 0.0;
+	float result = 0.0;
 
 /* */
-	if ( i_end > npts )
-		return 0.0;
-/* */
-	for ( int i = 1; i < i_end; i++ ) {
-		result   = (input[i] - input[i - 1]) / delta;
-		sum_dis += input[i] * input[i];
-		sum_vel += result * result;
+	if ( i_end < npts ) {
+		result = PI2 * sqrt(sum_dis[i_end] / sum_vel[i_end]);
 	}
-
-	result = PI2 * sqrt(sum_dis / sum_vel);
 
 	return result > 10.0 ? 10.0 : result;
 }

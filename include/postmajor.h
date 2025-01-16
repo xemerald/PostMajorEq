@@ -14,7 +14,7 @@
 #include <sachead.h>
 /* */
 #define PROG_NAME       "postmajor"
-#define VERSION         "2.0.0 - 2024-04-05"
+#define VERSION         "2.1.0 - 2025-01-16"
 #define AUTHOR          "Benjamin Ming Yang"
 /* */
 #define  OUTPUT_FILE_HEADER \
@@ -69,6 +69,9 @@ typedef struct {
 	float pv3;
 	float pd3;
 	float tc;
+/* */
+	float *sum_vel;
+	float *sum_dis;
 /* */
 	int pga_pos;
 	int pgv_pos;
