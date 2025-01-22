@@ -107,6 +107,9 @@ int main( int argc, char **argv )
 
 	/* Set the time before origin time 1 sec. as the start point for scaning */
 		if ( !( snl_infos[i].pick_flag = pick_pwave_arrival( &snl_infos[i], otime )) ) {
+		/* */
+			if ( snl_infos[i].parrival_pos > snl_infos[i].npts )
+				snl_infos[i].parrival_pos = 0;
 			fprintf(
 				stderr, "Can't find valid P arrival (Np: %d, SNR: %lf), skip those time related parameters for SNL %s.%s.%s.\n",
 				snl_infos[i].parrival_pos, snl_infos[i].snr, snl_infos[i].sta, snl_infos[i].net, snl_infos[i].loc
