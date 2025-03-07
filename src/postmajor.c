@@ -51,6 +51,9 @@ static _Bool IgnStaWithoutData = false;
 static _Bool IgnStaWithoutPick = false;
 static _Bool TwoStageIntegral  = false;
 static _Bool VecSumSwitch      = false;
+static float PdWarnThreshold   = DEF_PD_WARN_THRESHOLD;
+static float PGAWarnThreshold  = DEF_PGA_WARN_THRESHOLD;
+static float PGAWatchThreshold = DEF_PGA_WATCH_THRESHOLD;
 static char *EqInfoFile        = NULL;
 static char *StaListFile       = NULL;
 static char *SeisDataFile      = NULL;
@@ -361,9 +364,10 @@ static void init_snl_info_params( SNL_INFO *snl_info )
 	snl_info->pga_pos   = -1;
 	snl_info->pgv_pos   = -1;
 	snl_info->pgd_pos   = -1;
-	snl_info->pd35_pos  = -1;
-	snl_info->pga80_pos = -1;
-	snl_info->pga4_pos  = -1;
+/* */
+	snl_info->pd_warn_pos   = -1;
+	snl_info->pga_warn_pos  = -1;
+	snl_info->pga_watch_pos = -1;
 /* */
 	snl_info->pga_leadtime = -1.0;
 	snl_info->pgv_leadtime = -1.0;
@@ -566,7 +570,7 @@ static void proc_acc( SNL_INFO *snl_info, const int end_pos )
 	float vec_sum[snl_info->npts];
 
 /* */
-	snl_info->pga80_pos = snl_info->pga4_pos = end_pos;
+	snl_info->pga_warn_pos = snl_info->pga_watch_pos = end_pos;
 /* */
 	if ( VecSumSwitch ) {
 		for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
@@ -576,14 +580,14 @@ static void proc_acc( SNL_INFO *snl_info, const int end_pos )
 				snl_info->seis[2][j] * snl_info->seis[2][j];
 			vec_sum[j] = sqrtf(vec_sum[j]);
 		/* */
-			if ( vec_sum[j] > 4.0 ) {
+			if ( vec_sum[j] > PGAWatchThreshold ) {
 			/* */
-				if ( j < snl_info->pga4_pos )
-					snl_info->pga4_pos = j;
+				if ( j < snl_info->pga_watch_pos )
+					snl_info->pga_watch_pos = j;
 			/* */
-				if ( vec_sum[j] > 80.0 ) {
-					if ( j < snl_info->pga80_pos )
-						snl_info->pga80_pos = j;
+				if ( vec_sum[j] > PGAWarnThreshold ) {
+					if ( j < snl_info->pga_warn_pos )
+						snl_info->pga_warn_pos = j;
 				}
 			}
 		/* */
@@ -599,14 +603,14 @@ static void proc_acc( SNL_INFO *snl_info, const int end_pos )
 		for ( int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
 			for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
 			/* */
-				if ( fabs(snl_info->seis[i][j]) > 4.0 ) {
+				if ( fabs(snl_info->seis[i][j]) > PGAWatchThreshold ) {
 				/* */
-					if ( j < snl_info->pga4_pos )
-						snl_info->pga4_pos = j;
+					if ( j < snl_info->pga_watch_pos )
+						snl_info->pga_watch_pos = j;
 				/* */
-					if ( fabs(snl_info->seis[i][j]) > 80.0 ) {
-						if ( j < snl_info->pga80_pos )
-							snl_info->pga80_pos = j;
+					if ( fabs(snl_info->seis[i][j]) > PGAWarnThreshold ) {
+						if ( j < snl_info->pga_warn_pos )
+							snl_info->pga_warn_pos = j;
 					}
 				}
 			/* */
@@ -685,7 +689,7 @@ static void proc_disp( SNL_INFO *snl_info, const int end_pos )
 	float vec_sum[snl_info->npts];
 
 /* */
-	snl_info->pd35_pos = end_pos;
+	snl_info->pd_warn_pos = end_pos;
 /* */
 	if ( VecSumSwitch ) {
 		for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
@@ -698,9 +702,9 @@ static void proc_disp( SNL_INFO *snl_info, const int end_pos )
 		/* */
 			vec_sum[j] = sqrtf(vec_sum[j]);
 		/* */
-			if ( vec_sum[j] > 0.35 ) {
-				if ( j < snl_info->pd35_pos )
-					snl_info->pd35_pos = j;
+			if ( vec_sum[j] > PdWarnThreshold ) {
+				if ( j < snl_info->pd_warn_pos )
+					snl_info->pd_warn_pos = j;
 			}
 		/* */
 			if ( vec_sum[j] > snl_info->pgd ) {
@@ -716,9 +720,9 @@ static void proc_disp( SNL_INFO *snl_info, const int end_pos )
 		for ( int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
 			for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
 			/* */
-				if ( fabs(snl_info->seis[i][j]) > 0.35 ) {
-					if ( j < snl_info->pd35_pos )
-						snl_info->pd35_pos = j;
+				if ( fabs(snl_info->seis[i][j]) > PdWarnThreshold ) {
+					if ( j < snl_info->pd_warn_pos )
+						snl_info->pd_warn_pos = j;
 				}
 			/* */
 				if ( fabs(snl_info->seis[i][j]) > snl_info->pgd ) {
@@ -745,7 +749,7 @@ static void proc_disp( SNL_INFO *snl_info, const int end_pos )
 static void proc_leadtime( SNL_INFO *snl_info )
 {
 /* */
-	if ( !snl_info->pick_flag || (snl_info->pd35_pos <= 0 && snl_info->pga80_pos <= 0) ) {
+	if ( !snl_info->pick_flag || (snl_info->pd_warn_pos <= 0 && snl_info->pga_warn_pos <= 0) ) {
 		snl_info->pga_leadtime = snl_info->pgv_leadtime = -1.0;
 	/* Reset the P-wave peak value 'cause there is not valid arrival time */
 		if ( !snl_info->pick_flag )
@@ -753,15 +757,15 @@ static void proc_leadtime( SNL_INFO *snl_info )
 	}
 	else {
 	/* */
-		if ( (snl_info->pga_pos - snl_info->pd35_pos) <= (snl_info->pga_pos - snl_info->pga80_pos) )
-			snl_info->pga_leadtime = (snl_info->pga_pos - snl_info->pga80_pos) * snl_info->delta;
+		if ( (snl_info->pga_pos - snl_info->pd_warn_pos) <= (snl_info->pga_pos - snl_info->pga_warn_pos) )
+			snl_info->pga_leadtime = (snl_info->pga_pos - snl_info->pga_warn_pos) * snl_info->delta;
 		else
-			snl_info->pga_leadtime = (snl_info->pga_pos - snl_info->pd35_pos) * snl_info->delta;
+			snl_info->pga_leadtime = (snl_info->pga_pos - snl_info->pd_warn_pos) * snl_info->delta;
 	/* */
-		if ( (snl_info->pgv_pos - snl_info->pd35_pos) <= (snl_info->pgv_pos - snl_info->pga80_pos) )
-			snl_info->pgv_leadtime = (snl_info->pgv_pos - snl_info->pga80_pos) * snl_info->delta;
+		if ( (snl_info->pgv_pos - snl_info->pd_warn_pos) <= (snl_info->pgv_pos - snl_info->pga_warn_pos) )
+			snl_info->pgv_leadtime = (snl_info->pgv_pos - snl_info->pga_warn_pos) * snl_info->delta;
 		else
-			snl_info->pgv_leadtime = (snl_info->pgv_pos - snl_info->pd35_pos) * snl_info->delta;
+			snl_info->pgv_leadtime = (snl_info->pgv_pos - snl_info->pd_warn_pos) * snl_info->delta;
 	/* */
 		if ( snl_info->pga_leadtime < 0.0 )
 			snl_info->pga_leadtime = 0.0;
