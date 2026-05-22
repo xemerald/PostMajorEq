@@ -376,9 +376,9 @@ static void init_snl_info_params( SNL_INFO *snl_info )
 	snl_info->pga_warn_pos  = -1;
 	snl_info->pga_watch_pos = -1;
 /* */
-	snl_info->pga_leadtime = -1.0;
-	snl_info->pgv_leadtime = -1.0;
-	snl_info->na_leadtime  = -1.0;
+	snl_info->pga_leadtime = NAN;
+	snl_info->pgv_leadtime = NAN;
+	snl_info->na_leadtime  = NAN;
 
 	return;
 }
@@ -760,10 +760,10 @@ static void proc_leadtime( SNL_INFO *snl_info )
 {
 /* */
 	if ( !snl_info->pick_flag || (snl_info->pd_warn_pos <= 0 && snl_info->pga_warn_pos <= 0) ) {
-		snl_info->na_leadtime = snl_info->pga_leadtime = snl_info->pgv_leadtime = -1.0;
+		snl_info->na_leadtime = snl_info->pga_leadtime = snl_info->pgv_leadtime = NAN;
 	/* Reset the P-wave peak value 'cause there is not valid arrival time */
 		if ( !snl_info->pick_flag )
-			snl_info->pa3 = snl_info->pv3 = snl_info->pd3 = snl_info->tc = -1.0;
+			snl_info->pa3 = snl_info->pv3 = snl_info->pd3 = snl_info->tc = 0.0;
 	}
 	else {
 	/* */
@@ -780,14 +780,14 @@ static void proc_leadtime( SNL_INFO *snl_info )
 		if ( snl_info->pga >= PGAWarnThreshold && snl_info->pd >= PdWarnThreshold )
 			snl_info->na_leadtime = (snl_info->pga_warn_pos - snl_info->pd_warn_pos) * snl_info->delta;
 		else if ( snl_info->pd >= PdWarnThreshold )
-			snl_info->na_leadtime = NAN;
+			snl_info->na_leadtime = -1.0;
 	/* */
 		if ( snl_info->na_leadtime < 0.0 )
-			snl_info->na_leadtime = 0.0;
+			snl_info->na_leadtime = NAN;
 		if ( snl_info->pga_leadtime < 0.0 )
-			snl_info->pga_leadtime = 0.0;
+			snl_info->pga_leadtime = NAN;
 		if ( snl_info->pgv_leadtime < 0.0 )
-			snl_info->pgv_leadtime = 0.0;
+			snl_info->pgv_leadtime = NAN;
 	}
 
 	return;
