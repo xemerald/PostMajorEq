@@ -16,3 +16,7 @@
 int seisdata_load_sac( SNL_INFO *, const char * );
 int seisdata_load_ms( SNL_INFO *, const char * );
 int seisdata_load_tank( SNL_INFO *, const char * );
+/* */
+void seisdata_release_sac( void );
+void seisdata_release_ms( void );
+void seisdata_release_tank( void );

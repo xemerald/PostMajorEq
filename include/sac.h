@@ -21,4 +21,3 @@ struct SAChead *sac_scnl_modify( struct SAChead *, const char *, const char *, c
 struct SAChead *sac_az_inc_modify( struct SAChead *, const float, const float );
 const char *sac_scnl_print( struct SAChead * );
 double sac_reftime_fetch( struct SAChead * );
-float *sac_data_preprocess( struct SAChead *, float *, const float );

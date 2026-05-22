@@ -19,12 +19,12 @@
 /* */
 #define OUTPUT_FILE_HEADER \
 		"#SNL          PGA         PGV         PGD         PA3         PV3         PD3         TauC3       " \
-		"PGA_LT      PGV_LT      E_Dist         SNR"
+		"PGA_LT      PGV_LT      NA_LT      E_Dist         SNR"
 #define OUTPUT_FILE_COOR_HEADER \
 		"         LAT         LON          ELEV"
 /* */
 #define OUTPUT_DATA_FORMAT \
-		"%s.%s.%s %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %14.6lf"
+		"%s.%s.%s %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %11.6lf %14.6lf"
 #define OUTPUT_DATA_COOR_FORMAT \
 		" %11.6lf %11.6lf %8.2lf"
 /* */
@@ -73,6 +73,7 @@ typedef struct {
 	float pv3;
 	float pd3;
 	float tc;
+	float pd;
 /* */
 	float *sum_vel;
 	float *sum_dis;
@@ -84,6 +85,7 @@ typedef struct {
 	int pga_warn_pos;
 	int pga_watch_pos;
 /* */
+	float na_leadtime;
 	float pga_leadtime;
 	float pgv_leadtime;
 /* */

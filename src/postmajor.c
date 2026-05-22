@@ -45,19 +45,20 @@ static float  calc_tau_c( const float *, const float *, const int, const float, 
 static float  calc_peak_value( const float *, const int, const float, const int );
 static double coor2distf( const double, const double, const double, const double );
 /* */
-static _Bool HeaderSwitch      = true;
-static _Bool CoordinateSwitch  = false;
-static _Bool IgnStaWithoutData = false;
-static _Bool IgnStaWithoutPick = false;
-static _Bool TwoStageIntegral  = false;
-static _Bool VecSumSwitch      = false;
-static float PdWarnThreshold   = DEF_PD_WARN_THRESHOLD;
-static float PGAWarnThreshold  = DEF_PGA_WARN_THRESHOLD;
-static float PGAWatchThreshold = DEF_PGA_WATCH_THRESHOLD;
-static char *EqInfoFile        = NULL;
-static char *StaListFile       = NULL;
-static char *SeisDataFile      = NULL;
-static int (*LoadSeisdataFunc)( SNL_INFO *, const char * ) = seisdata_load_sac;
+static _Bool  HeaderSwitch      = true;
+static _Bool  CoordinateSwitch  = false;
+static _Bool  IgnStaWithoutData = false;
+static _Bool  IgnStaWithoutPick = false;
+static _Bool  TwoStageIntegral  = false;
+static _Bool  VecSumSwitch      = false;
+static float  PdWarnThreshold   = DEF_PD_WARN_THRESHOLD;
+static float  PGAWarnThreshold  = DEF_PGA_WARN_THRESHOLD;
+static float  PGAWatchThreshold = DEF_PGA_WATCH_THRESHOLD;
+static char  *EqInfoFile        = NULL;
+static char  *StaListFile       = NULL;
+static char  *SeisDataFile      = NULL;
+static int  (*LoadSeisdataFunc)( SNL_INFO *, const char * ) = seisdata_load_sac;
+static void (*ReleaseSeisdataFunc)( void ) = seisdata_release_sac;
 
 /**
  * @brief
@@ -92,7 +93,7 @@ int main( int argc, char **argv )
 		return -1;
 
 /* */
-	for ( int i = 0; i < totalsnl; i++ ) {
+	for ( register int i = 0; i < totalsnl; i++ ) {
 	/* */
 		snl_infos[i].epic_dist = coor2distf( elon, elat, snl_infos[i].longitude, snl_infos[i].latitude );
 
@@ -164,7 +165,7 @@ int main( int argc, char **argv )
 		);
 
 	/* After the processing, free the seismic data memory space */
-		for ( int j = 0; j < NUM_CHANNEL_SNL; j++ ) {
+		for ( register int j = 0; j < NUM_CHANNEL_SNL; j++ ) {
 			if ( snl_infos[i].seis[j] ) {
 				free(snl_infos[i].seis[j]);
 				snl_infos[i].seis[j] = NULL;
@@ -185,7 +186,7 @@ int main( int argc, char **argv )
 		fprintf(stdout, "\n");
 	}
 /* Then, all the stations' result */
-	for ( int i = 0; i < totalsnl; i++ ) {
+	for ( register int i = 0; i < totalsnl; i++ ) {
 	/* */
 		if ( (IgnStaWithoutData && snl_infos[i].npts < 0) || (IgnStaWithoutPick && !snl_infos[i].pick_flag) )
 			continue;
@@ -195,7 +196,8 @@ int main( int argc, char **argv )
 			snl_infos[i].sta, snl_infos[i].net, snl_infos[i].loc,
 			snl_infos[i].pga, snl_infos[i].pgv, snl_infos[i].pgd,
 			snl_infos[i].pa3, snl_infos[i].pv3, snl_infos[i].pd3, snl_infos[i].tc,
-			snl_infos[i].pga_leadtime, snl_infos[i].pgv_leadtime, snl_infos[i].epic_dist, snl_infos[i].snr
+			snl_infos[i].pga_leadtime, snl_infos[i].pgv_leadtime, snl_infos[i].na_leadtime,
+			snl_infos[i].epic_dist, snl_infos[i].snr
 		);
 		if ( CoordinateSwitch )
 			fprintf(
@@ -206,6 +208,7 @@ int main( int argc, char **argv )
 	}
 
 /* */
+	ReleaseSeisdataFunc();
 	free(snl_infos);
 
 	return 0;
@@ -222,7 +225,7 @@ static int proc_argv( int argc, char *argv[] )
 {
 	char informat[16] = { 0 };
 
-	for ( int i = 1; i < argc; i++ ) {
+	for ( register int i = 1; i < argc; i++ ) {
 		if ( !strcmp(argv[i], "-v") ) {
 			fprintf(stdout, "%s\n", PROG_NAME);
 			fprintf(stdout, "Version: %s\n", VERSION);
@@ -284,12 +287,15 @@ static int proc_argv( int argc, char *argv[] )
 /* */
 	if ( !strcmp(informat, "SAC") ) {
 		LoadSeisdataFunc = seisdata_load_sac;
+		ReleaseSeisdataFunc = seisdata_release_sac;
 	}
 	else if ( !strcmp(informat, "MSEED") || !strcmp(informat, "MSEED3") ) {
 		LoadSeisdataFunc = seisdata_load_ms;
+		ReleaseSeisdataFunc = seisdata_release_ms;
 	}
 	else if ( !strcmp(informat, "TANK") ) {
 		LoadSeisdataFunc = seisdata_load_tank;
+		ReleaseSeisdataFunc = seisdata_release_tank;
 	}
 	else {
 		fprintf(stderr, "Unknown format: %s\n", informat);
@@ -357,6 +363,7 @@ static void init_snl_info_params( SNL_INFO *snl_info )
 	snl_info->pv3 = 0.0;
 	snl_info->pd3 = 0.0;
 	snl_info->tc  = 0.0;
+	snl_info->pd  = 0.0;
 /* */
 	snl_info->sum_vel = NULL;
 	snl_info->sum_dis = NULL;
@@ -371,6 +378,7 @@ static void init_snl_info_params( SNL_INFO *snl_info )
 /* */
 	snl_info->pga_leadtime = -1.0;
 	snl_info->pgv_leadtime = -1.0;
+	snl_info->na_leadtime  = -1.0;
 
 	return;
 }
@@ -386,7 +394,7 @@ static int parse_stalist_line( SNL_INFO *snl_info, const char *line )
 {
 /* */
 	if ( strlen(line) ) {
-		for ( int i = 0; i < MAX_STR_SIZE; i++ ) {
+		for ( register int i = 0; i < MAX_STR_SIZE; i++ ) {
 			if ( line[i] == '#' || line[i] == '\n' ) {
 				break;
 			}
@@ -491,7 +499,7 @@ static int parse_eqinfo_file( const char *path, float *epc_lat, float *epc_lon, 
 	while ( fgets(line, sizeof(line) - 1, fd) != NULL ) {
 	/* */
 		if ( strlen(line) ) {
-			for ( int i = 0; i < MAX_STR_SIZE; i++ ) {
+			for ( register int i = 0; i < MAX_STR_SIZE; i++ ) {
 				if ( line[i] == '#' || line[i] == '\n' ) {
 					break;
 				}
@@ -573,7 +581,7 @@ static void proc_acc( SNL_INFO *snl_info, const int end_pos )
 	snl_info->pga_warn_pos = snl_info->pga_watch_pos = end_pos;
 /* */
 	if ( VecSumSwitch ) {
-		for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+		for ( register int j = snl_info->parrival_pos; j < end_pos; j++ ) {
 			vec_sum[j] =
 				snl_info->seis[0][j] * snl_info->seis[0][j] +
 				snl_info->seis[1][j] * snl_info->seis[1][j] +
@@ -600,8 +608,8 @@ static void proc_acc( SNL_INFO *snl_info, const int end_pos )
 		snl_info->pa3 = calc_peak_value( &vec_sum[snl_info->parrival_pos], end_pos, snl_info->delta, 3 );
 	}
 	else {
-		for ( int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
-			for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+		for ( register int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
+			for ( register int j = snl_info->parrival_pos; j < end_pos; j++ ) {
 			/* */
 				if ( fabs(snl_info->seis[i][j]) > PGAWatchThreshold ) {
 				/* */
@@ -640,7 +648,7 @@ static void proc_vel( SNL_INFO *snl_info, const int end_pos )
 
 /* */
 	if ( VecSumSwitch ) {
-		for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+		for ( register int j = snl_info->parrival_pos; j < end_pos; j++ ) {
 			vec_sum[j] =
 				snl_info->seis[0][j] * snl_info->seis[0][j] +
 				snl_info->seis[1][j] * snl_info->seis[1][j] +
@@ -659,8 +667,8 @@ static void proc_vel( SNL_INFO *snl_info, const int end_pos )
 		snl_info->pv3 = calc_peak_value( &vec_sum[snl_info->parrival_pos], end_pos, snl_info->delta, 3 );
 	}
 	else {
-		for ( int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
-			for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+		for ( register int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
+			for ( register int j = snl_info->parrival_pos; j < end_pos; j++ ) {
 			/* */
 				if ( fabs(snl_info->seis[i][j]) > snl_info->pgv ) {
 					snl_info->pgv     = fabs(snl_info->seis[i][j]);
@@ -669,7 +677,7 @@ static void proc_vel( SNL_INFO *snl_info, const int end_pos )
 			}
 		}
 	/* */
-		for ( int i = snl_info->parrival_pos; i < end_pos; i++ )
+		for ( register int i = snl_info->parrival_pos; i < end_pos; i++ )
 			snl_info->sum_vel[i] = snl_info->seis[0][i] * snl_info->seis[0][i] + snl_info->sum_vel[i > 0 ? i - 1 : 0];
 	/* */
 		snl_info->pv3 = calc_peak_value( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
@@ -692,7 +700,7 @@ static void proc_disp( SNL_INFO *snl_info, const int end_pos )
 	snl_info->pd_warn_pos = end_pos;
 /* */
 	if ( VecSumSwitch ) {
-		for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+		for ( register int j = snl_info->parrival_pos; j < end_pos; j++ ) {
 			vec_sum[j] =
 				snl_info->seis[0][j] * snl_info->seis[0][j] +
 				snl_info->seis[1][j] * snl_info->seis[1][j] +
@@ -717,11 +725,13 @@ static void proc_disp( SNL_INFO *snl_info, const int end_pos )
 	}
 	else {
 	/* */
-		for ( int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
-			for ( int j = snl_info->parrival_pos; j < end_pos; j++ ) {
+		for ( register int i = 0; i < NUM_CHANNEL_SNL; i++ ) {
+			for ( register int j = snl_info->parrival_pos; j < end_pos; j++ ) {
 			/* */
-				if ( fabs(snl_info->seis[i][j]) > PdWarnThreshold ) {
-					if ( j < snl_info->pd_warn_pos )
+				if ( i == 0 ) {
+					if ( fabs(snl_info->seis[i][j]) > snl_info->pd )
+						snl_info->pd = fabs(snl_info->seis[i][j]);
+					if ( fabs(snl_info->seis[i][j]) > PdWarnThreshold && j < snl_info->pd_warn_pos )
 						snl_info->pd_warn_pos = j;
 				}
 			/* */
@@ -732,7 +742,7 @@ static void proc_disp( SNL_INFO *snl_info, const int end_pos )
 			}
 		}
 	/* */
-		for ( int i = snl_info->parrival_pos; i < end_pos; i++ )
+		for ( register int i = snl_info->parrival_pos; i < end_pos; i++ )
 			snl_info->sum_dis[i] = snl_info->seis[0][i] * snl_info->seis[0][i] + snl_info->sum_dis[i > 0 ? i - 1 : 0];
 	/* Computation of Pd at 3 seconds */
 		snl_info->pd3 = calc_peak_value( snl_info->seis[0] + snl_info->parrival_pos, end_pos, snl_info->delta, 3 );
@@ -750,7 +760,7 @@ static void proc_leadtime( SNL_INFO *snl_info )
 {
 /* */
 	if ( !snl_info->pick_flag || (snl_info->pd_warn_pos <= 0 && snl_info->pga_warn_pos <= 0) ) {
-		snl_info->pga_leadtime = snl_info->pgv_leadtime = -1.0;
+		snl_info->na_leadtime = snl_info->pga_leadtime = snl_info->pgv_leadtime = -1.0;
 	/* Reset the P-wave peak value 'cause there is not valid arrival time */
 		if ( !snl_info->pick_flag )
 			snl_info->pa3 = snl_info->pv3 = snl_info->pd3 = snl_info->tc = -1.0;
@@ -767,6 +777,13 @@ static void proc_leadtime( SNL_INFO *snl_info )
 		else
 			snl_info->pgv_leadtime = (snl_info->pgv_pos - snl_info->pd_warn_pos) * snl_info->delta;
 	/* */
+		if ( snl_info->pga >= PGAWarnThreshold && snl_info->pd >= PdWarnThreshold )
+			snl_info->na_leadtime = (snl_info->pga_warn_pos - snl_info->pd_warn_pos) * snl_info->delta;
+		else if ( snl_info->pd >= PdWarnThreshold )
+			snl_info->na_leadtime = NAN;
+	/* */
+		if ( snl_info->na_leadtime < 0.0 )
+			snl_info->na_leadtime = 0.0;
 		if ( snl_info->pga_leadtime < 0.0 )
 			snl_info->pga_leadtime = 0.0;
 		if ( snl_info->pgv_leadtime < 0.0 )
@@ -784,7 +801,7 @@ static void proc_leadtime( SNL_INFO *snl_info )
  */
 static void integral_waveforms( SNL_INFO *snl_info, const _Bool filter_sw )
 {
-	for ( int i = 0; i < NUM_CHANNEL_SNL; i++ )
+	for ( register int i = 0; i < NUM_CHANNEL_SNL; i++ )
 		_integral_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta, filter_sw );
 
 	return;
@@ -797,7 +814,7 @@ static void integral_waveforms( SNL_INFO *snl_info, const _Bool filter_sw )
  */
 static void differential_waveform( SNL_INFO *snl_info )
 {
-	for ( int i = 0; i < NUM_CHANNEL_SNL; i++ )
+	for ( register int i = 0; i < NUM_CHANNEL_SNL; i++ )
 		_differential_waveform( snl_info->seis[i], snl_info->npts, snl_info->delta );
 
 	return;
@@ -816,11 +833,11 @@ static float *_integral_waveform( float *input, const int npts, const double del
 {
 	const float half_delta = delta * 0.5;
 
-	float last_seis  = 0.0;
-	float this_pseis = 0.0;
+	register float last_seis  = 0.0;
+	register float this_pseis = 0.0;
 
 /* */
-	for ( int i = 0; i < npts; i++ ) {
+	for ( register int i = 0; i < npts; i++ ) {
 		this_pseis = (input[i] + last_seis) * half_delta + this_pseis;
 		last_seis  = input[i];
 		input[i]   = this_pseis;
@@ -842,11 +859,11 @@ static float *_integral_waveform( float *input, const int npts, const double del
  */
 static float *_differential_waveform( float *input, const int npts, const double delta )
 {
-	float last_seis  = 0.0;
-	float this_pseis = 0.0;
+	register float last_seis  = 0.0;
+	register float this_pseis = 0.0;
 
 /* */
-	for ( int i = 0; i < npts; i++ ) {
+	for ( register int i = 0; i < npts; i++ ) {
 		this_pseis = (input[i] - last_seis) / delta;
 		last_seis  = input[i];
 		input[i]   = this_pseis;
@@ -874,12 +891,12 @@ static float *highpass_filter( float *input, const int npts, const double delta,
 
 /* First time, forward filtering */
 	memset(stage, 0, sizeof(IIR_STAGE) * filter.nsects);
-	for ( int i = 0; i < npts; i++ )
+	for ( register int i = 0; i < npts; i++ )
 		input[i] = iirfilter_apply( input[i], &filter, stage );
 /* Second time, backward filtering */
 	if ( zero_phase ) {
 		memset(stage, 0, sizeof(IIR_STAGE) * filter.nsects);
-		for ( int i = npts - 1; i >= 0; i-- )
+		for ( register int i = npts - 1; i >= 0; i-- )
 			input[i] = iirfilter_apply( input[i], &filter, stage );
 	}
 /* */
@@ -905,9 +922,8 @@ static float calc_tau_c( const float *sum_dis, const float *sum_vel, const int n
 	float result = 0.0;
 
 /* */
-	if ( i_end < npts ) {
+	if ( i_end < npts )
 		result = PI2 * sqrt(sum_dis[i_end] / sum_vel[i_end]);
-	}
 
 	return result > 10.0 ? 10.0 : result;
 }
@@ -925,13 +941,13 @@ static float calc_peak_value( const float *input, const int npts, const float de
 {
 	const int i_end = (int)(sec / delta);
 
-	float result = 0.0;
+	register float result = 0.0;
 
 /* */
 	if ( i_end > npts )
 		return 0.0;
 
-	for ( int i = 1; i < i_end; i++ ) {
+	for ( register int i = 1; i < i_end; i++ ) {
 	/* */
 		if ( fabs(input[i]) > result )
 			result = fabs(input[i]);

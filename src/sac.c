@@ -26,9 +26,6 @@
 /*  */
 static int    read_sac_header( FILE *, struct SAChead * );
 static double fetch_sac_time( const struct SAChead * );
-static float  applygain_sac_data( float *, const int, const float );
-static float  dmean_sac_data( float *, const int, const float );
-static int    fillgap_sac_data( float *, const int, const float );
 static char  *trim_sac_string( char *, const int );
 static void   swap_order_4byte( void * );
 
@@ -215,26 +212,6 @@ double sac_reftime_fetch( struct SAChead *sh )
 }
 
 /**
- * @brief
- *
- * @param sh
- * @param seis
- * @param gain_fac
- * @return float*
- */
-float *sac_data_preprocess( struct SAChead *sh, float *seis, const float gain_fac )
-{
-	applygain_sac_data( seis, sh->npts, gain_fac );
-	dmean_sac_data( seis, sh->npts, 1.0 / sh->delta );
-	fprintf(
-		stderr, "Found %d gaps within total %d samples in %s, filled with 0.0!\n",
-		fillgap_sac_data( seis, sh->npts, 0.0 ), sh->npts, sac_scnl_print( sh )
-	);
-
-	return seis;
-}
-
-/**
  * @brief Read the header portion of a SAC file into memory.
  *
  * @param fp Pointer to an open file from which to read
@@ -300,81 +277,6 @@ static double fetch_sac_time( const struct SAChead *sh )
 	result      += sh->nzmsec / 1000.0;
 
 	return result;
-}
-
-/**
- * @brief
- *
- * @param input
- * @param npts
- * @param gain
- * @return float
- */
-static float applygain_sac_data( float *input, const int npts, const float gain )
-{
-/* */
-	for ( int i = 0; i < npts; i++ ) {
-		if ( input[i] != SACUNDEF )
-			input[i] *= gain;
-	}
-
-	return gain;
-}
-
-/**
- * @brief
- *
- * @param input
- * @param npts
- * @param samprate
- * @return float
- */
-static float dmean_sac_data( float *input, const int npts, const float samprate )
-{
-	int   i_head;
-	int   mean_count = 0;
-	float mean = 0.0;
-
-/* */
-	i_head = (int)(npts * 0.1);
-	i_head = i_head >= (int)samprate ? i_head : npts;
-	for ( int i = 0; i < i_head; i++ ) {
-		if ( input[i] != SACUNDEF ) {
-			mean += input[i];
-			mean_count++;
-		}
-	}
-	mean /= mean_count;
-/* */
-	for ( int i = 0; i < npts; i++ ) {
-		if ( input[i] != SACUNDEF )
-			input[i] -= mean;
-	}
-
-	return mean;
-}
-
-/**
- * @brief
- *
- * @param input
- * @param npts
- * @param fill
- * @return int
- */
-static int fillgap_sac_data( float *input, const int npts, const float fill )
-{
-	int gap_count = 0;
-
-/* */
-	for ( int i = 0; i < npts; i++ ) {
-		if ( input[i] == SACUNDEF ) {
-			input[i] = fill;
-			gap_count++;
-		}
-	}
-
-	return gap_count;
 }
 
 /**
