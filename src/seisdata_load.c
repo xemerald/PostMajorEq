@@ -207,17 +207,25 @@ int seisdata_load_ms( SNL_INFO *snl_info, const char *path )
 			if ( (offset = (seg->starttime - lastend) * 1.0e-9 * seg->samprate - 1) > 0 )
 				seis_idx += offset;
 		/* */
+			if ( seis_idx >= npts || (seis_idx + seg->numsamples) > npts ) {
+				fprintf(
+					stderr, "WARNING! Real total samples in SID: %s, "
+					"might exceed the number of sample compute from time range (index: %d > npts: %d)!\n",
+					tid[i]->sid, seis_idx, npts
+				);
+			}
+		/* */
 			switch ( sampletype ) {
 			case 'i':
-				for ( register int j = 0; j < seg->numsamples; j++ )
+				for ( register int j = 0; j < seg->numsamples && seis_idx < npts; j++ )
 					_seis[seis_idx++] = *((int32_t *)seg->datasamples + j);
 				break;
 			case 'f':
-				for ( register int j = 0; j < seg->numsamples; j++ )
+				for ( register int j = 0; j < seg->numsamples && seis_idx < npts; j++ )
 					_seis[seis_idx++] = *((float *)seg->datasamples + j);
 				break;
 			case 'd':
-				for ( register int j = 0; j < seg->numsamples; j++ )
+				for ( register int j = 0; j < seg->numsamples && seis_idx < npts; j++ )
 					_seis[seis_idx++] = *((double *)seg->datasamples + j);
 				break;
 			default:
