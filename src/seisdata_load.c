@@ -207,11 +207,11 @@ int seisdata_load_ms( SNL_INFO *snl_info, const char *path )
 			if ( (offset = (seg->starttime - lastend) * 1.0e-9 * seg->samprate - 1) > 0 )
 				seis_idx += offset;
 		/* */
-			if ( seis_idx >= npts || (seis_idx + seg->numsamples) > npts ) {
+			if ( (seis_idx + seg->numsamples) > npts ) {
 				fprintf(
 					stderr, "WARNING! Real total samples in SID: %s, "
-					"might exceed the number of sample compute from time range (index: %d > npts: %d)!\n",
-					tid[i]->sid, seis_idx, npts
+					"might exceed the number of sample compute from time range (next index: %d > npts: %d)!\n",
+					tid[i]->sid, seis_idx + seg->numsamples, npts
 				);
 			}
 		/* */
